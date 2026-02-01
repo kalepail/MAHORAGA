@@ -1,0 +1,118 @@
+name = "mahoraga"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ============================================================================
+# Environment Variables (non-secret)
+# ============================================================================
+[vars]
+ENVIRONMENT = "development"
+# Feature flags
+FEATURE_LLM_RESEARCH = "false"
+FEATURE_OPTIONS = "false"
+# Default policy (can be overridden in D1)
+DEFAULT_MAX_POSITION_PCT = "0.10"
+DEFAULT_MAX_NOTIONAL_PER_TRADE = "5000"
+DEFAULT_MAX_DAILY_LOSS_PCT = "0.02"
+DEFAULT_COOLDOWN_MINUTES = "30"
+DEFAULT_MAX_OPEN_POSITIONS = "10"
+DEFAULT_APPROVAL_TTL_SECONDS = "300"
+
+# ============================================================================
+# Secrets (set via `wrangler secret put <NAME>`)
+# ============================================================================
+# ALPACA_API_KEY        - Alpaca API key
+# ALPACA_API_SECRET     - Alpaca API secret
+# ALPACA_PAPER          - "true" for paper trading (default), "false" for live
+# OPENAI_API_KEY        - OpenAI API key (optional, for LLM features)
+# KILL_SWITCH_SECRET    - Secret for HMAC signing approval tokens
+
+# ============================================================================
+# D1 Database
+# ============================================================================
+[[d1_databases]]
+binding = "DB"
+database_name = "mahoraga-db"
+database_id = "placeholder-will-be-replaced-after-create"
+migrations_dir = "migrations"
+
+# ============================================================================
+# KV Namespace (hot cache)
+# ============================================================================
+[[kv_namespaces]]
+binding = "CACHE"
+id = "placeholder-will-be-replaced-after-create"
+
+# ============================================================================
+# R2 Bucket (artifacts storage)
+# ============================================================================
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "mahoraga-artifacts"
+
+# ============================================================================
+# Durable Objects
+# ============================================================================
+[[durable_objects.bindings]]
+name = "SESSION"
+class_name = "SessionDO"
+
+[[durable_objects.bindings]]
+name = "MCP_AGENT"
+class_name = "MahoragaMcpAgent"
+
+[[durable_objects.bindings]]
+name = "TRADING_AGENT"
+class_name = "TradingAgentDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO", "MahoragaMcpAgent"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TradingAgentDO"]
+
+# ============================================================================
+# Cron Triggers
+# ============================================================================
+[triggers]
+crons = [
+  # Event ingestion during market hours (UTC covers ET timezone variations)
+  "*/5 13-20 * * 1-5",
+  
+  # Daily market open prep (9:00 AM ET = 14:00 UTC)
+  "0 14 * * 1-5",
+  
+  # Daily market close cleanup (4:30 PM ET = 21:30 UTC)
+  "30 21 * * 1-5",
+  
+  # Midnight reset (reset daily counters)
+  "0 5 * * *",
+  
+  # Hourly cache refresh
+  "0 * * * *"
+]
+
+# ============================================================================
+# Build Configuration
+# ============================================================================
+[build]
+command = "npm run build"
+
+# ============================================================================
+# Development Configuration
+# ============================================================================
+[dev]
+port = 8787
+local_protocol = "http"
+
+# ============================================================================
+# Production Environment
+# ============================================================================
+[env.production]
+name = "mahoraga-production"
+
+[env.production.vars]
+ENVIRONMENT = "production"
