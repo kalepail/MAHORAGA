@@ -1,0 +1,83 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mahoraga-leaderboard",
+  "compatibility_date": "2025-04-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./worker/index.ts",
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+
+  // D1 Database
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mahoraga-leaderboard-db",
+      "database_id": "00000000-0000-0000-0000-000000000001"
+    }
+  ],
+
+  // KV Namespace (leaderboard + profile caches)
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "00000000-0000-0000-0000-000000000002"
+    }
+  ],
+
+  // Durable Objects (per-trader sync)
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SYNCER",
+        "class_name": "SyncerDO"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SyncerDO"]
+    }
+  ],
+
+  // Queue (adaptive sync scheduling)
+  "queues": {
+    "producers": [
+      {
+        "binding": "SYNC_QUEUE",
+        "queue": "mahoraga-sync-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "mahoraga-sync-queue",
+        "max_batch_size": 5,
+        "max_batch_timeout": 10,
+        "max_concurrency": 20
+      }
+    ]
+  },
+
+  // Paper-only enforcement is hardcoded in the Worker:
+  //   1. OAuth authorize uses env=paper (user only sees paper account)
+  //   2. All API calls go to paper-api.alpaca.markets (never live)
+  //   3. No trading or account:write scopes requested (read-only default)
+
+  // Secrets (set via `wrangler secret put`):
+  //   ALPACA_OAUTH_CLIENT_ID     - OAuth app client ID from Alpaca
+  //   ALPACA_OAUTH_CLIENT_SECRET - OAuth app client secret from Alpaca
+  //   ENCRYPTION_KEY             - 256-bit key for encrypting OAuth tokens at rest
+
+  "vars": {
+    "ALPACA_OAUTH_REDIRECT_URI": "http://localhost:5173/api/oauth/callback"
+  },
+
+  // Cron: every 15 min for composite scores, tier assignment, stale trader re-enqueue
+  "triggers": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  }
+}

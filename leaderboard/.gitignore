@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-worker/
+.wrangler/
+.dev.vars
+.dev.vars.*
+*.local
+worker-configuration.d.ts
