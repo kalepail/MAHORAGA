@@ -329,8 +329,11 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           const estimatedCost = input.notional ?? (input.qty ?? 0) * estimatedPrice;
 
+          const isCrypto = input.symbol.includes("/");
+
           const preview = {
             symbol: input.symbol.toUpperCase(),
+            asset_class: (isCrypto ? "crypto" : "us_equity") as "crypto" | "us_equity",
             side: input.side,
             qty: input.qty,
             notional: input.notional,
@@ -1283,6 +1286,7 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             const approval = await generateApprovalToken({
               preview: {
                 symbol: input.contract_symbol.toUpperCase(),
+                asset_class: "us_equity",
                 side: input.side,
                 qty: input.qty,
                 order_type: input.order_type,
