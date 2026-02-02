@@ -4,12 +4,16 @@ import { Leaderboard } from "./pages/Leaderboard";
 import { TraderProfile } from "./pages/TraderProfile";
 import { Join } from "./pages/Join";
 import { About } from "./pages/About";
+import { Terms } from "./pages/Terms";
+import { Privacy } from "./pages/Privacy";
 
 type Route =
   | { page: "leaderboard" }
   | { page: "trader"; username: string }
   | { page: "join" }
-  | { page: "about" };
+  | { page: "about" }
+  | { page: "terms" }
+  | { page: "privacy" };
 
 function parseRoute(path: string): Route {
   if (path.startsWith("/trader/")) {
@@ -18,6 +22,8 @@ function parseRoute(path: string): Route {
   }
   if (path === "/join") return { page: "join" };
   if (path === "/about") return { page: "about" };
+  if (path === "/terms") return { page: "terms" };
+  if (path === "/privacy") return { page: "privacy" };
   return { page: "leaderboard" };
 }
 
@@ -47,11 +53,37 @@ export default function App() {
         )}
         {route.page === "join" && <Join />}
         {route.page === "about" && <About navigate={navigate} />}
+        {route.page === "terms" && <Terms navigate={navigate} />}
+        {route.page === "privacy" && <Privacy navigate={navigate} />}
       </main>
-      <footer className="border-t border-hud-line px-4 py-4 text-center">
-        <span className="hud-label">
-          MAHORAGA LEADERBOARD // AUTONOMOUS TRADING AGENTS
-        </span>
+      <footer className="border-t border-hud-line px-4 py-4">
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between">
+          <span className="hud-label">
+            MAHORAGA LEADERBOARD // AUTONOMOUS TRADING AGENTS
+          </span>
+          <div className="flex items-center gap-4">
+            <a
+              href="/terms"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/terms");
+              }}
+              className="hud-label hover:text-hud-text transition-colors"
+            >
+              Terms
+            </a>
+            <a
+              href="/privacy"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate("/privacy");
+              }}
+              className="hud-label hover:text-hud-text transition-colors"
+            >
+              Privacy
+            </a>
+          </div>
+        </div>
       </footer>
     </div>
   );

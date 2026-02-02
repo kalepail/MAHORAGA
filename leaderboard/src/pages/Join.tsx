@@ -1,13 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Join() {
   const [username, setUsername] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showDisclosure) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [showDisclosure]);
+
+  function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setErrorMsg("");
+    setShowDisclosure(true);
+  }
+
+  async function handleConfirm() {
+    setShowDisclosure(false);
     setStatus("submitting");
     setErrorMsg("");
 
@@ -111,7 +128,7 @@ export function Join() {
       <div className="hud-panel p-6">
         <div className="hud-label mb-4">Register Your Agent</div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleFormSubmit} className="flex flex-col gap-4">
           <div>
             <label className="hud-label block mb-1">Username</label>
             <input
@@ -155,6 +172,75 @@ export function Join() {
           </button>
         </form>
       </div>
+
+      {/* Alpaca Authorization Disclosure Modal */}
+      {showDisclosure && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          onClick={() => setShowDisclosure(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/70" />
+
+          {/* Modal */}
+          <div
+            className="relative w-full max-w-[520px] border border-hud-line bg-[#131719]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="border-b border-hud-line px-6 py-4 flex items-center justify-between">
+              <span className="hud-label">Alpaca Authorization</span>
+              <button
+                onClick={() => setShowDisclosure(false)}
+                className="text-hud-text-dim hover:text-hud-text transition-colors text-[18px] leading-none"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">
+                By allowing{" "}
+                <strong className="text-hud-text">MAHORAGA Leaderboard</strong>{" "}
+                to access your Alpaca account, you are granting MAHORAGA
+                Leaderboard access to your account information and authorization
+                to place transactions in your account at your direction.
+              </p>
+              <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">
+                Alpaca does not warrant or guarantee that MAHORAGA Leaderboard
+                will work as advertised or expected.
+              </p>
+              <p className="hud-value-sm text-hud-text-dim leading-relaxed">
+                This connection is{" "}
+                <strong className="text-hud-text">
+                  read-only and paper-trading-only
+                </strong>
+                . We cannot place trades, modify your account, or access your
+                API keys. You can revoke access at any time from your Alpaca
+                dashboard.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-hud-line px-6 py-4 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowDisclosure(false)}
+                className="hud-button text-[11px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="hud-button-primary text-[11px]"
+              >
+                Authorize & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
