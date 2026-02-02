@@ -210,6 +210,7 @@ interface AgentState {
   twitterDailyReadReset: number;
   premarketPlan: PremarketPlan | null;
   enabled: boolean;
+  buyFailures: Record<string, number>; // symbol → timestamp of last failure
 }
 
 // ============================================================================
@@ -285,7 +286,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   options_stop_loss_pct: 50,
   options_take_profit_pct: 100,
   options_max_positions: 3,
-  crypto_enabled: false,
+  crypto_enabled: true,
   crypto_symbols: ["BTC/USD", "ETH/USD", "SOL/USD"],
   crypto_momentum_threshold: 2.0,
   crypto_max_position_value: 1000,
@@ -311,14 +312,49 @@ const DEFAULT_STATE: AgentState = {
   twitterDailyReadReset: 0,
   premarketPlan: null,
   enabled: false,
+  buyFailures: {},
 };
 
-// Blacklist for ticker extraction
+// Blacklist for ticker extraction — common English words, acronyms, and trading
+// jargon that collide with ticker-like patterns on social media.
 const TICKER_BLACKLIST = new Set([
-  "CEO", "CFO", "IPO", "EPS", "GDP", "SEC", "FDA", "USA", "USD", "ETF",
-  "ATH", "ATL", "IMO", "FOMO", "YOLO", "DD", "TA", "THE", "AND", "FOR",
-  "ARE", "BUT", "NOT", "YOU", "ALL", "CAN", "HER", "WAS", "ONE", "OUR",
-  "WSB", "RIP", "LOL", "OMG", "WTF", "FUD", "HODL", "APE", "GME", "AMC",
+  // Finance / market acronyms
+  "CEO", "CFO", "COO", "CTO", "IPO", "EPS", "GDP", "SEC", "FDA", "FED",
+  "USD", "EUR", "GBP", "JPY", "ETF", "NAV", "PE", "PB", "ROI", "ROE",
+  "ATH", "ATL", "YTD", "QOQ", "YOY", "AUM", "OTC", "NYSE", "FDIC",
+  // Trading jargon
+  "ITM", "OTM", "ATM", "DTE", "IV", "RSI", "MACD", "EMA", "SMA", "VWAP",
+  "FOMO", "YOLO", "DD", "TA", "FA", "PT", "TP", "SL", "DCA", "HODL",
+  "FUD", "DIPS", "PUMP", "DUMP", "BAGS", "GAIN", "LOSS", "PUTS", "CALL",
+  // Reddit / internet speak
+  "WSB", "RIP", "LOL", "OMG", "WTF", "LMAO", "TLDR", "IMHO", "AFAIK",
+  "IMO", "EDIT", "LINK", "POST", "FLAIR", "MODS", "OP",
+  // Common English words (2-5 letters, frequently ALL-CAPS on Reddit)
+  "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "CAN", "HER",
+  "WAS", "ONE", "OUR", "HAS", "HAD", "HIS", "HOW", "ITS", "LET", "MAY",
+  "NEW", "NOW", "OLD", "OWN", "SAY", "SHE", "TOO", "USE", "DAD", "MOM",
+  "WHO", "BOY", "DID", "GET", "HIM", "HIT", "MAN", "RAN", "SIT", "TOP",
+  "RED", "TEN", "YES", "BIG", "END", "FAR", "FEW", "GOT", "SET", "TRY",
+  "WHY", "AIM", "AGO", "ERA", "USA", "APE",
+  "ALSO", "BACK", "BEEN", "CALL", "COME", "DOWN", "EACH", "EVEN", "FIND",
+  "FROM", "GIVE", "GOOD", "HAVE", "HERE", "HIGH", "INTO", "JUST", "KEEP",
+  "KNOW", "LAST", "LIKE", "LIVE", "LONG", "LOOK", "MADE", "MAKE", "MANY",
+  "MORE", "MOST", "MOVE", "MUCH", "MUST", "NEED", "NEXT", "ONLY", "OVER",
+  "PART", "PLAY", "REAL", "SAME", "SEEN", "SENT", "SHOW", "SOME", "SUCH",
+  "SURE", "TAKE", "TELL", "THAN", "THAT", "THEM", "THEN", "THEY", "THIS",
+  "TIME", "TURN", "VERY", "WANT", "WEEK", "WELL", "WENT", "WERE", "WHAT",
+  "WHEN", "WILL", "WITH", "WORK", "YEAR", "YOUR", "ZERO",
+  "ABOUT", "AFTER", "BEING", "BELOW", "COULD", "EVERY", "FIRST", "GOING",
+  "GREAT", "NEVER", "OTHER", "PLACE", "RIGHT", "SHALL", "SINCE", "START",
+  "STILL", "THEIR", "THERE", "THESE", "THINK", "THOSE", "TODAY", "UNDER",
+  "WATCH", "WHERE", "WHICH", "WHILE", "WHOLE", "WORLD", "WOULD", "MONEY",
+  "PRICE", "SHARE", "TRADE", "VALUE", "STOCK", "LIMIT", "ORDER", "SHORT",
+  "HEDGE", "POINT",
+  // Common Reddit false positives (2-letter)
+  "MY", "NO", "ON", "TO", "UP", "SO", "DO", "GO", "IF", "IN", "IS", "IT",
+  "ME", "OR", "WE", "AN", "AS", "AT", "BE", "BY", "HE",
+  // Meme / culture
+  "MEME", "MOON", "BEAR", "BULL", "CHAD", "COPE", "HODL", "TANK", "YEET",
 ]);
 
 // ============================================================================
@@ -377,14 +413,29 @@ function getFlairMultiplier(flair: string | null | undefined): number {
  */
 function extractTickers(text: string): string[] {
   const matches = new Set<string>();
-  const regex = /\$([A-Z]{1,5})\b|\b([A-Z]{2,5})\b(?=\s+(?:calls?|puts?|stock|shares?|moon|rocket|yolo|buy|sell|long|short))/gi;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const ticker = (match[1] || match[2] || "").toUpperCase();
-    if (ticker.length >= 2 && ticker.length <= 5 && !TICKER_BLACKLIST.has(ticker)) {
+
+  // Branch 1: Cashtags like $AAPL or $aapl — intentional ticker references.
+  // Case-insensitive since people write $aapl and $AAPL interchangeably.
+  const cashtagRegex = /\$([A-Za-z]{1,5})\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = cashtagRegex.exec(text)) !== null) {
+    const ticker = (match[1] ?? "").toUpperCase();
+    if (ticker.length >= 2 && !TICKER_BLACKLIST.has(ticker)) {
       matches.add(ticker);
     }
   }
+
+  // Branch 2: Bare uppercase words followed by trading terms (e.g., "AAPL calls").
+  // NO case-insensitive flag — only matches genuinely uppercase text to avoid
+  // capturing common words like "that stock" or "going long".
+  const bareWordRegex = /\b([A-Z]{2,5})\b(?=\s+(?:calls?|puts?|stock|shares?|moon|rocket|yolo|buy|sell|long|short))/g;
+  while ((match = bareWordRegex.exec(text)) !== null) {
+    const ticker = match[1] ?? "";
+    if (ticker.length >= 2 && !TICKER_BLACKLIST.has(ticker)) {
+      matches.add(ticker);
+    }
+  }
+
   return Array.from(matches);
 }
 
@@ -767,12 +818,16 @@ export class MahoragaHarness extends DurableObject<Env> {
     try {
       // Get trending symbols
       const trendingRes = await fetch("https://api.stocktwits.com/api/2/trending/symbols.json");
-      if (!trendingRes.ok) return [];
+      if (!trendingRes.ok) {
+        this.log("StockTwits", "trending_failed", { status: trendingRes.status, statusText: trendingRes.statusText });
+        return [];
+      }
       const trendingData = await trendingRes.json() as { symbols?: Array<{ symbol: string }> };
       const trending = trendingData.symbols || [];
+      this.log("StockTwits", "trending_fetched", { count: trending.length });
       
-      // Get sentiment for top trending
-      for (const sym of trending.slice(0, 15)) {
+      // Get sentiment for top trending (skip StockTwits .X crypto suffixes — not real exchange symbols)
+      for (const sym of trending.filter(s => !s.symbol.includes(".")).slice(0, 15)) {
         try {
           const streamRes = await fetch(`https://api.stocktwits.com/api/2/streams/symbol/${sym.symbol}.json?limit=30`);
           if (!streamRes.ok) continue;
@@ -815,7 +870,8 @@ export class MahoragaHarness extends DurableObject<Env> {
           }
           
           await this.sleep(200);
-        } catch {
+        } catch (error) {
+          this.log("StockTwits", "symbol_error", { symbol: sym.symbol, message: String(error) });
           continue;
         }
       }
@@ -848,7 +904,10 @@ export class MahoragaHarness extends DurableObject<Env> {
         const res = await fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=25`, {
           headers: { "User-Agent": "Mahoraga/2.0" },
         });
-        if (!res.ok) continue;
+        if (!res.ok) {
+          this.log("Reddit", "fetch_failed", { subreddit: sub, status: res.status, statusText: res.statusText });
+          continue;
+        }
         const data = await res.json() as { data?: { children?: Array<{ data: { title?: string; selftext?: string; created_utc?: number; ups?: number; num_comments?: number; link_flair_text?: string } }> } };
         const posts = data.data?.children?.map(c => c.data) || [];
         
@@ -898,10 +957,13 @@ export class MahoragaHarness extends DurableObject<Env> {
         }
         
         await this.sleep(1000);
-      } catch {
+      } catch (error) {
+        this.log("Reddit", "subreddit_error", { subreddit: sub, message: String(error) });
         continue;
       }
     }
+
+    this.log("Reddit", "tickers_extracted", { unique_tickers: tickerData.size, tickers: Array.from(tickerData.keys()).slice(0, 20) });
 
     const signals: Signal[] = [];
     for (const [symbol, data] of tickerData) {
@@ -1152,17 +1214,30 @@ JSON response:
     confidence: number,
     account: Account
   ): Promise<boolean> {
+    // Verify asset is tradeable (crypto symbols may use "/" format vs Alpaca's flat format)
+    const assetSymbol = symbol.replace("/", "");
+    try {
+      const asset = await alpaca.trading.getAsset(assetSymbol);
+      if (!asset || asset.status !== "active" || !asset.tradable) {
+        this.log("Crypto", "buy_skipped", { symbol, reason: `Asset not tradable (status: ${asset?.status}, tradable: ${asset?.tradable})` });
+        return false;
+      }
+    } catch (error) {
+      this.log("Crypto", "buy_skipped", { symbol, reason: `Asset lookup failed: ${String(error)}` });
+      return false;
+    }
+
     const sizePct = Math.min(20, this.state.config.position_size_pct_of_cash);
     const positionSize = Math.min(
       account.cash * (sizePct / 100) * confidence,
       this.state.config.crypto_max_position_value
     );
-    
+
     if (positionSize < 10) {
       this.log("Crypto", "buy_skipped", { symbol, reason: "Position too small" });
       return false;
     }
-    
+
     try {
       const order = await alpaca.trading.createOrder({
         symbol,
@@ -1560,7 +1635,10 @@ JSON response:
       return [];
     }
 
-    this.log("SignalResearch", "researching_signals", { count: candidates.length });
+    this.log("SignalResearch", "researching_signals", {
+      count: candidates.length,
+      symbols: candidates.map(c => `${c.symbol}(${c.raw_sentiment.toFixed(2)})`),
+    });
 
     const aggregated = new Map<string, { symbol: string; sentiment: number; sources: string[] }>();
     for (const sig of candidates) {
@@ -1932,17 +2010,48 @@ Response format:
     confidence: number,
     account: Account
   ): Promise<boolean> {
+    // Skip symbols that recently failed (30-minute cooldown)
+    const BUY_FAILURE_COOLDOWN_MS = 30 * 60 * 1000;
+    const lastFailure = this.state.buyFailures[symbol];
+    if (lastFailure && Date.now() - lastFailure < BUY_FAILURE_COOLDOWN_MS) {
+      return false;
+    }
+
+    // Verify asset is active and tradeable before placing order
+    try {
+      const asset = await alpaca.trading.getAsset(symbol);
+      if (!asset) {
+        this.state.buyFailures[symbol] = Date.now();
+        this.log("Executor", "buy_skipped", { symbol, reason: "Asset not found" });
+        return false;
+      }
+      if (asset.status !== "active") {
+        this.state.buyFailures[symbol] = Date.now();
+        this.log("Executor", "buy_skipped", { symbol, reason: `Asset status: ${asset.status}` });
+        return false;
+      }
+      if (!asset.tradable) {
+        this.state.buyFailures[symbol] = Date.now();
+        this.log("Executor", "buy_skipped", { symbol, reason: "Asset not tradable (halted or restricted)" });
+        return false;
+      }
+    } catch (error) {
+      this.state.buyFailures[symbol] = Date.now();
+      this.log("Executor", "buy_skipped", { symbol, reason: `Asset lookup failed: ${String(error)}` });
+      return false;
+    }
+
     const sizePct = Math.min(20, this.state.config.position_size_pct_of_cash);
     const positionSize = Math.min(
       account.cash * (sizePct / 100) * confidence,
       this.state.config.max_position_value
     );
-    
+
     if (positionSize < 100) {
       this.log("Executor", "buy_skipped", { symbol, reason: "Position too small" });
       return false;
     }
-    
+
     try {
       const order = await alpaca.trading.createOrder({
         symbol,
@@ -1955,7 +2064,8 @@ Response format:
       this.log("Executor", "buy_executed", { symbol, status: order.status, size: positionSize });
       return true;
     } catch (error) {
-      this.log("Executor", "buy_failed", { symbol, error: String(error) });
+      this.state.buyFailures[symbol] = Date.now();
+      this.log("Executor", "buy_failed", { symbol, error: String(error), cooldown_minutes: 30 });
       return false;
     }
   }
@@ -2560,9 +2670,6 @@ Response format:
 // ============================================================================
 
 export function getHarnessStub(env: Env): DurableObjectStub {
-  if (!env.MAHORAGA_HARNESS) {
-    throw new Error("MAHORAGA_HARNESS binding not configured - check wrangler.toml");
-  }
   const id = env.MAHORAGA_HARNESS.idFromName("main");
   return env.MAHORAGA_HARNESS.get(id);
 }

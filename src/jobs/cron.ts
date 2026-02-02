@@ -28,10 +28,6 @@ export async function handleCronEvent(cronId: string, env: Env): Promise<void> {
       await runMidnightReset(env);
       break;
 
-    case "0 * * * *":
-      await runHourlyCacheRefresh(env);
-      break;
-
     default:
       console.log(`Unknown cron: ${cronId}`);
   }
@@ -133,7 +129,3 @@ async function runMidnightReset(env: Env): Promise<void> {
   }
 }
 
-async function runHourlyCacheRefresh(_env: Env): Promise<void> {
-  console.log("Running hourly cache refresh...");
-  // TODO: Implement cache refresh for KV-cached data (movers, macro, etc.)
-}

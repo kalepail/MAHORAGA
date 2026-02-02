@@ -11,6 +11,7 @@
     "db:migrate": "wrangler d1 migrations apply mahoraga-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply mahoraga-db --remote",
     "db:studio": "wrangler d1 execute mahoraga-db --local --command 'SELECT 1'",
+    "types": "wrangler types",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "vitest",
@@ -31,6 +32,6 @@
     "wrangler": "^4.61.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }
