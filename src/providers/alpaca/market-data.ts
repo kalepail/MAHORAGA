@@ -149,12 +149,16 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
   }
 
   async getQuote(symbol: string): Promise<Quote> {
-    const response = await this.client.dataRequest<AlpacaQuotesResponse>(
+    const response = await this.client.dataRequest<AlpacaQuotesResponse | { quote: AlpacaQuote; symbol: string }>(
       "GET",
       `/v2/stocks/${encodeURIComponent(symbol)}/quotes/latest`
     );
 
-    const quote = response.quotes[symbol];
+    // Single-symbol endpoint returns { quote: {...}, symbol } (singular)
+    // Multi-symbol endpoint returns { quotes: { SYMBOL: {...} } } (plural)
+    const quote = 'quote' in response
+      ? (response as { quote: AlpacaQuote; symbol: string }).quote
+      : (response as AlpacaQuotesResponse).quotes[symbol];
     if (!quote) {
       throw new Error(`No quote data for ${symbol}`);
     }

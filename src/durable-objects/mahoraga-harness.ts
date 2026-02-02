@@ -992,8 +992,7 @@ export class MahoragaHarness extends DurableObject<Env> {
   ): Promise<void> {
     if (!this.state.config.crypto_enabled) return;
     
-    const cryptoSymbols = new Set(this.state.config.crypto_symbols || []);
-    const cryptoPositions = positions.filter(p => cryptoSymbols.has(p.symbol) || p.symbol.includes("/"));
+    const cryptoPositions = positions.filter(p => p.asset_class === "crypto");
     const heldCrypto = new Set(cryptoPositions.map(p => p.symbol));
     
     for (const pos of cryptoPositions) {
@@ -1443,8 +1442,15 @@ JSON response:
 
     try {
       const alpaca = createAlpacaProviders(this.env);
-      const quote = await alpaca.marketData.getQuote(symbol).catch(() => null);
-      const price = quote?.ask_price || quote?.bid_price || 0;
+      const cryptoSymbols = new Set(this.state.config.crypto_symbols);
+      let price = 0;
+      if (cryptoSymbols.has(symbol)) {
+        const snapshot = await alpaca.marketData.getCryptoSnapshot(symbol).catch(() => null);
+        price = snapshot?.latest_trade?.price || snapshot?.latest_quote?.ask_price || snapshot?.latest_quote?.bid_price || 0;
+      } else {
+        const quote = await alpaca.marketData.getQuote(symbol.toUpperCase()).catch(() => null);
+        price = quote?.ask_price || quote?.bid_price || 0;
+      }
 
       const prompt = `Should we BUY this stock based on social sentiment and fundamentals?
 
