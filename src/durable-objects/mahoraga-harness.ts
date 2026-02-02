@@ -275,6 +275,8 @@ interface AgentState {
   twitterDailyReadReset: number;
   premarketPlan: PremarketPlan | null;
   enabled: boolean;
+  lastAlarmAt: number;
+  lastError: string | null;
   buyFailures: Record<string, number>; // symbol → timestamp of last failure
 }
 
@@ -377,6 +379,8 @@ const DEFAULT_STATE: AgentState = {
   twitterDailyReadReset: 0,
   premarketPlan: null,
   enabled: false,
+  lastAlarmAt: 0,
+  lastError: null,
   buyFailures: {},
 };
 
@@ -567,11 +571,13 @@ export class MahoragaHarness extends DurableObject<Env> {
       return;
     }
 
+    this.state.lastAlarmAt = Date.now();
     const now = Date.now();
     const RESEARCH_INTERVAL_MS = 120_000;
     const POSITION_RESEARCH_INTERVAL_MS = 300_000;
-    
+
     try {
+      this.state.lastError = null;
       const alpaca = createAlpacaProviders(this.env);
       const clock = await alpaca.trading.getClock();
       
@@ -651,12 +657,12 @@ export class MahoragaHarness extends DurableObject<Env> {
           }
         }
       }
-      
-      await this.persist();
     } catch (error) {
+      this.state.lastError = String(error);
       this.log("System", "alarm_error", { error: String(error) });
     }
-    
+
+    await this.persist();
     await this.scheduleNextAlarm();
   }
 
@@ -787,6 +793,8 @@ export class MahoragaHarness extends DurableObject<Env> {
         costs: this.state.costTracker,
         lastAnalystRun: this.state.lastAnalystRun,
         lastResearchRun: this.state.lastResearchRun,
+        lastAlarmAt: this.state.lastAlarmAt,
+        lastError: this.state.lastError,
         signalResearch: this.state.signalResearch,
         positionResearch: this.state.positionResearch,
         positionEntries: this.state.positionEntries,
@@ -801,7 +809,7 @@ export class MahoragaHarness extends DurableObject<Env> {
     const body = await request.json() as Partial<AgentConfig>;
     this.state.config = { ...this.state.config, ...body };
     await this.persist();
-    return this.jsonResponse({ ok: true, config: this.state.config });
+    return this.jsonResponse({ ok: true, data: this.state.config });
   }
 
   private async handleEnable(): Promise<Response> {

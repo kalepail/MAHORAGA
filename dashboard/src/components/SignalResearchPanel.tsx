@@ -7,15 +7,18 @@ import type { SignalResearch } from '../types'
 
 interface SignalResearchPanelProps {
   signalResearch: Record<string, SignalResearch>
+  isAgentEnabled: boolean
 }
 
-export function SignalResearchPanel({ signalResearch }: SignalResearchPanelProps) {
+export function SignalResearchPanel({ signalResearch, isAgentEnabled }: SignalResearchPanelProps) {
   return (
     <div className="col-span-4 md:col-span-8 lg:col-span-4">
       <Panel title="SIGNAL RESEARCH" titleRight={Object.keys(signalResearch).length.toString()} className="h-80">
         <div className="overflow-y-auto h-full space-y-2">
           {Object.entries(signalResearch).length === 0 ? (
-            <div className="text-hud-text-dim text-sm py-4 text-center">Researching candidates...</div>
+            <div className="text-hud-text-dim text-sm py-4 text-center">
+              {isAgentEnabled ? 'Researching candidates...' : 'Agent is disabled — enable to start research'}
+            </div>
           ) : (
             Object.entries(signalResearch).map(([symbol, research]: [string, SignalResearch]) => (
               <Tooltip

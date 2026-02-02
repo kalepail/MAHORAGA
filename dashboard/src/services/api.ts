@@ -24,5 +24,9 @@ export function authFetch(url: string, options: RequestInit = {}): Promise<Respo
 
 export async function fetchJson<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const res = await authFetch(url, options)
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    return { ok: false, data: undefined as T, error: `${res.status}: ${text || res.statusText}` }
+  }
   return res.json() as Promise<ApiResponse<T>>
 }

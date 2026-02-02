@@ -7,15 +7,18 @@ import type { Signal } from '../types'
 
 interface SignalsPanelProps {
   signals: Signal[]
+  isAgentEnabled: boolean
 }
 
-export function SignalsPanel({ signals }: SignalsPanelProps) {
+export function SignalsPanel({ signals, isAgentEnabled }: SignalsPanelProps) {
   return (
     <div className="col-span-4 md:col-span-4 lg:col-span-4">
       <Panel title="ACTIVE SIGNALS" titleRight={signals.length.toString()} className="h-80">
         <div className="overflow-y-auto h-full space-y-1">
           {signals.length === 0 ? (
-            <div className="text-hud-text-dim text-sm py-4 text-center">Gathering signals...</div>
+            <div className="text-hud-text-dim text-sm py-4 text-center">
+              {isAgentEnabled ? 'Gathering signals...' : 'Agent is disabled — enable to start gathering signals'}
+            </div>
           ) : (
             signals.slice(0, 20).map((sig: Signal, i: number) => (
               <Tooltip

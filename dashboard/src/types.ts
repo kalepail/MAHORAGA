@@ -191,6 +191,7 @@ export interface PositionHistory {
 }
 
 export interface Status {
+  enabled: boolean
   account: Account | null
   positions: Position[]
   clock: Clock | null
@@ -200,6 +201,8 @@ export interface Status {
   costs: CostTracker
   lastAnalystRun: number
   lastResearchRun: number
+  lastAlarmAt?: number
+  lastError?: string | null
   signalResearch: Record<string, SignalResearch>
   positionResearch: Record<string, PositionResearch>
   portfolioHistory?: PortfolioSnapshot[]

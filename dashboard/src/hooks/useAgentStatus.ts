@@ -89,13 +89,28 @@ export function useAgentStatus() {
     }
   }, [setupChecked, showSetup])
 
-  const saveConfig = async (config: Config) => {
-    const data = await fetchJson<Config>(`${API_BASE}/config`, {
-      method: 'POST',
-      body: JSON.stringify(config),
-    })
-    if (data.ok && status) {
-      setStatus({ ...status, config: data.data })
+  const saveConfig = async (config: Config): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const data = await fetchJson<Config>(`${API_BASE}/config`, {
+        method: 'POST',
+        body: JSON.stringify(config),
+      })
+      if (data.ok && status) {
+        setStatus({ ...status, config: data.data })
+        return { ok: true }
+      }
+      return { ok: false, error: data.error || 'Failed to save config' }
+    } catch {
+      return { ok: false, error: 'Connection failed' }
+    }
+  }
+
+  const toggleAgent = async () => {
+    const endpoint = status?.enabled ? 'disable' : 'enable'
+    const data = await fetchJson<Status>(`${API_BASE}/${endpoint}`, { method: 'POST' })
+    if (data.ok) {
+      const updated = await fetchJson<Status>(`${API_BASE}/status`)
+      if (updated.ok) setStatus(updated.data)
     }
   }
 
@@ -107,5 +122,6 @@ export function useAgentStatus() {
     setupChecked,
     portfolioHistory,
     saveConfig,
+    toggleAgent,
   }
 }

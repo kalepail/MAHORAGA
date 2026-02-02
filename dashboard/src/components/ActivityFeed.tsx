@@ -7,9 +7,10 @@ import type { LogEntry } from '../types'
 
 interface ActivityFeedProps {
   logs: LogEntry[]
+  isAgentEnabled: boolean
 }
 
-export function ActivityFeed({ logs }: ActivityFeedProps) {
+export function ActivityFeed({ logs, isAgentEnabled }: ActivityFeedProps) {
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -21,7 +22,9 @@ export function ActivityFeed({ logs }: ActivityFeedProps) {
       <Panel title="ACTIVITY FEED" titleRight="LIVE" className="h-80">
         <div className="overflow-y-auto h-full font-mono text-xs space-y-1">
           {logs.length === 0 ? (
-            <div className="text-hud-text-dim py-4 text-center">Waiting for activity...</div>
+            <div className="text-hud-text-dim py-4 text-center">
+              {isAgentEnabled ? 'Waiting for activity...' : 'Agent is disabled — no activity to show'}
+            </div>
           ) : (
             logs.slice(-50).map((log: LogEntry, i: number) => (
               <motion.div

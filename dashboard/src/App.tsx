@@ -19,6 +19,14 @@ import type { Position } from './types'
 
 const positionColors = ['cyan', 'purple', 'yellow', 'blue', 'green'] as const
 
+function relativeTime(ts: number): string {
+  if (!ts) return 'never'
+  const delta = Math.floor((Date.now() - ts) / 1000)
+  if (delta < 60) return `${delta}s ago`
+  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`
+  return `${Math.floor(delta / 3600)}h ago`
+}
+
 export default function App() {
   const {
     status,
@@ -27,6 +35,7 @@ export default function App() {
     setShowSetup,
     portfolioHistory,
     saveConfig,
+    toggleAgent,
   } = useAgentStatus()
 
   const [showSettings, setShowSettings] = useState(false)
@@ -46,6 +55,7 @@ export default function App() {
   const costs = status?.costs || { total_usd: 0, calls: 0, tokens_in: 0, tokens_out: 0 }
   const config = status?.config
   const isMarketOpen = status?.clock?.is_open ?? false
+  const isAgentEnabled = status?.enabled ?? false
 
   const startingEquity = config?.starting_equity || 100000
   const unrealizedPl = positions.reduce((sum, p) => sum + p.unrealized_pl, 0)
@@ -156,10 +166,29 @@ export default function App() {
               label={isMarketOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}
               pulse={isMarketOpen}
             />
+            <button
+              onClick={toggleAgent}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              title={isAgentEnabled ? 'Click to disable agent' : 'Click to enable agent'}
+            >
+              <StatusIndicator
+                status={isAgentEnabled ? 'active' : 'error'}
+                label={isAgentEnabled ? 'AGENT ACTIVE' : 'AGENT DISABLED'}
+                pulse={isAgentEnabled}
+              />
+            </button>
+            {status?.lastError && (
+              <StatusIndicator
+                status="warning"
+                label="ERROR"
+                className="text-hud-warning"
+              />
+            )}
           </div>
           <div className="flex items-center gap-3 md:gap-6 flex-wrap">
             <StatusBar
               items={[
+                ...(isAgentEnabled && status?.lastAlarmAt ? [{ label: 'LAST RUN', value: relativeTime(status.lastAlarmAt) }] : []),
                 { label: 'LLM COST', value: `$${costs.total_usd.toFixed(4)}`, status: costs.total_usd > 1 ? 'warning' : 'active' },
                 { label: 'API CALLS', value: costs.calls.toString() },
               ]}
@@ -281,11 +310,11 @@ export default function App() {
           </div>
 
           {/* Row 3: Signals + Activity Feed + Research (4+4+4=12) */}
-          <SignalsPanel signals={signals} />
+          <SignalsPanel signals={signals} isAgentEnabled={isAgentEnabled} />
 
-          <ActivityFeed logs={logs} />
+          <ActivityFeed logs={logs} isAgentEnabled={isAgentEnabled} />
 
-          <SignalResearchPanel signalResearch={status?.signalResearch || {}} />
+          <SignalResearchPanel signalResearch={status?.signalResearch || {}} isAgentEnabled={isAgentEnabled} />
         </div>
 
         <footer className="mt-4 pt-3 border-t border-hud-line flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
