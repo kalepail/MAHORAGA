@@ -13,18 +13,20 @@ type Route =
   | { page: "join" }
   | { page: "about" }
   | { page: "terms" }
-  | { page: "privacy" };
+  | { page: "privacy" }
+  | { page: "not-found" };
 
 function parseRoute(path: string): Route {
+  if (path === "/" || path === "") return { page: "leaderboard" };
   if (path.startsWith("/trader/")) {
     const username = path.replace("/trader/", "").split("?")[0];
-    return { page: "trader", username };
+    if (username) return { page: "trader", username };
   }
   if (path === "/join") return { page: "join" };
   if (path === "/about") return { page: "about" };
   if (path === "/terms") return { page: "terms" };
   if (path === "/privacy") return { page: "privacy" };
-  return { page: "leaderboard" };
+  return { page: "not-found" };
 }
 
 export default function App() {
@@ -55,6 +57,15 @@ export default function App() {
         {route.page === "about" && <About navigate={navigate} />}
         {route.page === "terms" && <Terms navigate={navigate} />}
         {route.page === "privacy" && <Privacy navigate={navigate} />}
+        {route.page === "not-found" && (
+          <div className="text-center py-20">
+            <div className="hud-value-lg text-hud-text-dim mb-2">404</div>
+            <div className="hud-label mb-6">Page not found</div>
+            <button onClick={() => navigate("/")} className="hud-button">
+              Back to Leaderboard
+            </button>
+          </div>
+        )}
       </main>
       <footer className="border-t border-hud-line px-4 py-4">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between">
