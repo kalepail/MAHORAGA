@@ -301,6 +301,8 @@ interface LeaderboardRowProps {
 }
 
 function LeaderboardRow({ trader, rank, onClick }: LeaderboardRowProps) {
+  const syncing = !!trader.pending_sync;
+
   return (
     <tr
       className="border-b border-hud-line/50 hover:bg-hud-bg-panel/50 cursor-pointer transition-colors"
@@ -318,13 +320,18 @@ function LeaderboardRow({ trader, rank, onClick }: LeaderboardRowProps) {
         <span
           className={clsx(
             "text-[13px] font-medium",
-            rank === 1 && "text-rank-gold",
-            rank === 2 && "text-rank-silver",
-            rank === 3 && "text-rank-bronze",
-            rank > 3 && "text-hud-text-dim"
+            syncing
+              ? "text-hud-text-dim"
+              : rank === 1
+                ? "text-rank-gold"
+                : rank === 2
+                  ? "text-rank-silver"
+                  : rank === 3
+                    ? "text-rank-bronze"
+                    : "text-hud-text-dim"
           )}
         >
-          {rank}
+          {syncing ? "--" : rank}
         </span>
       </td>
       <td className="px-4 py-3">
@@ -332,48 +339,64 @@ function LeaderboardRow({ trader, rank, onClick }: LeaderboardRowProps) {
           <span className="hud-value-sm text-hud-text-bright">
             {trader.username}
           </span>
-          <AssetBadge assetClass={trader.asset_class} />
+          {syncing ? (
+            <span className="text-[9px] font-mono uppercase tracking-[0.1em] px-1.5 py-0.5 border border-hud-text-dim/30 text-hud-text-dim">
+              Syncing
+            </span>
+          ) : (
+            <AssetBadge assetClass={trader.asset_class} />
+          )}
         </div>
       </td>
-      <td className="px-4 py-3 text-right">
-        <span className="hud-value-sm text-hud-text-bright">
-          {formatMetric(trader.composite_score)}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl_pct))}>
-          {formatPercent(trader.total_pnl_pct)}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl))}>
-          {formatPnl(trader.total_pnl)}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="hud-value-sm">
-          {formatMetric(trader.sharpe_ratio, 2)}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="hud-value-sm">
-          {formatMetric(trader.win_rate, 1, "%")}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="hud-value-sm text-hud-error">
-          {formatMetric(trader.max_drawdown_pct, 1, "%")}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="hud-value-sm">{trader.num_trades}</span>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <Sparkline
-          data={trader.sparkline}
-          positive={trader.total_pnl_pct >= 0}
-        />
-      </td>
+      {syncing ? (
+        <td colSpan={8} className="px-4 py-3">
+          <span className="hud-label">
+            Initial sync in progress — data will appear shortly
+          </span>
+        </td>
+      ) : (
+        <>
+          <td className="px-4 py-3 text-right">
+            <span className="hud-value-sm text-hud-text-bright">
+              {formatMetric(trader.composite_score)}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl_pct ?? 0))}>
+              {formatPercent(trader.total_pnl_pct ?? 0)}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl ?? 0))}>
+              {formatPnl(trader.total_pnl ?? 0)}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className="hud-value-sm">
+              {formatMetric(trader.sharpe_ratio, 2)}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className="hud-value-sm">
+              {formatMetric(trader.win_rate, 1, "%")}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className="hud-value-sm text-hud-error">
+              {formatMetric(trader.max_drawdown_pct, 1, "%")}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <span className="hud-value-sm">{trader.num_trades ?? 0}</span>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <Sparkline
+              data={trader.sparkline}
+              positive={(trader.total_pnl_pct ?? 0) >= 0}
+            />
+          </td>
+        </>
+      )}
     </tr>
   );
 }

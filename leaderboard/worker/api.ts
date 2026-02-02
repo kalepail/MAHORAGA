@@ -88,16 +88,16 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
       t.joined_at,
       ps.equity, ps.total_pnl, ps.total_pnl_pct, ps.total_deposits,
       ps.sharpe_ratio, ps.win_rate, ps.max_drawdown_pct,
-      ps.num_trades, ps.composite_score, ps.open_positions, ps.snapshot_date
+      ps.num_trades, ps.composite_score, ps.open_positions, ps.snapshot_date,
+      CASE WHEN ps.trader_id IS NULL THEN 1 ELSE 0 END as pending_sync
     FROM traders t
-    INNER JOIN performance_snapshots ps ON ps.trader_id = t.id
-    INNER JOIN (
-      SELECT trader_id, MAX(snapshot_date) as latest_date
-      FROM performance_snapshots
-      WHERE snapshot_date >= date('now', '-' || ?1 || ' days')
-      GROUP BY trader_id
-    ) latest ON ps.trader_id = latest.trader_id AND ps.snapshot_date = latest.latest_date
-    WHERE t.is_active = 1 AND ps.num_trades >= ?2
+    LEFT JOIN performance_snapshots ps ON ps.trader_id = t.id
+      AND ps.snapshot_date = (
+        SELECT MAX(snapshot_date) FROM performance_snapshots
+        WHERE trader_id = t.id
+          AND snapshot_date >= date('now', '-' || ?1 || ' days')
+      )
+    WHERE t.is_active = 1 AND (ps.trader_id IS NULL OR COALESCE(ps.num_trades, 0) >= ?2)
   `;
 
   const params: (string | number)[] = [period, minTrades];
@@ -458,8 +458,9 @@ export async function handleOAuthCallback(
     { delaySeconds: 0 }
   );
 
+  const origin = new URL(request.url).origin;
   return Response.redirect(
-    `/trader/${pending.username}?registered=true`,
+    `${origin}/trader/${pending.username}?registered=true`,
     302
   );
 }

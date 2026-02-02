@@ -61,9 +61,10 @@ export class SyncerDO extends DurableObject<Env> {
       const equity = account.equity;
       const cash = account.cash;
       const dayPnl = equity - account.last_equity;
-      const totalPnl = equity - totalDeposits;
+      const effectiveDeposits = totalDeposits > 0 ? totalDeposits : history.base_value;
+      const totalPnl = equity - effectiveDeposits;
       const totalPnlPct =
-        totalDeposits > 0 ? ((equity - totalDeposits) / totalDeposits) * 100 : 0;
+        effectiveDeposits > 0 ? ((equity - effectiveDeposits) / effectiveDeposits) * 100 : 0;
 
       const unrealizedPnl = positions.reduce((s, p) => s + p.unrealized_pl, 0);
       const realizedPnl = totalPnl - unrealizedPnl;
@@ -107,7 +108,7 @@ export class SyncerDO extends DurableObject<Env> {
           today,
           equity,
           cash,
-          totalDeposits,
+          effectiveDeposits,
           totalPnl,
           totalPnlPct,
           unrealizedPnl,

@@ -8,7 +8,7 @@
  */
 
 import { SyncerDO } from "./syncer";
-import { corsHeaders, errorJson } from "./helpers";
+import { corsHeaders, errorJson, json } from "./helpers";
 import { processSyncMessage } from "./queue";
 import { runCronCycle } from "./cron";
 import {
@@ -20,7 +20,9 @@ import {
   handleOAuthCallback,
   handleRegister,
 } from "./api";
-import type { SyncMessage } from "./types";
+import { decryptToken } from "./crypto";
+import { invalidateTraderCache } from "./cache";
+import type { SyncMessage, TraderWithTokenRow } from "./types";
 
 // Re-export DO class so the Vite plugin bundles it
 export { SyncerDO };
@@ -100,9 +102,52 @@ async function handleApi(
       return await handleRegister(request, env);
     }
 
+    // Dev-only: manual sync trigger (bypasses queue)
+    const devSyncMatch = path.match(/^\/api\/dev\/sync\/([a-zA-Z0-9_]+)$/);
+    if (devSyncMatch && request.method === "POST") {
+      if (!env.ALPACA_OAUTH_REDIRECT_URI.includes("localhost")) {
+        return errorJson("Not found", 404);
+      }
+      return await handleDevSync(devSyncMatch[1], env);
+    }
+
     return errorJson("Not found", 404);
   } catch (err) {
     console.error("API error:", err);
     return errorJson("Internal server error", 500);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Dev-only: Manual Sync (bypasses queue for local testing)
+// ---------------------------------------------------------------------------
+
+async function handleDevSync(username: string, env: Env): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT t.id, t.username, t.is_active,
+            ot.access_token_encrypted
+     FROM traders t
+     LEFT JOIN oauth_tokens ot ON ot.trader_id = t.id
+     WHERE t.username = ?1`
+  ).bind(username).first<{ id: string; username: string; is_active: number; access_token_encrypted: string | null }>();
+
+  if (!row) return json({ error: "Trader not found" }, 404);
+  if (!row.access_token_encrypted) return json({ error: "No OAuth token" }, 400);
+
+  let token: string;
+  try {
+    token = await decryptToken(row.access_token_encrypted, env.ENCRYPTION_KEY, row.id);
+  } catch {
+    return json({ error: "Failed to decrypt token" }, 500);
+  }
+
+  const doId = env.SYNCER.idFromName(row.id);
+  const stub = env.SYNCER.get(doId);
+  const result = await stub.sync(row.id, token);
+
+  if (result.success) {
+    await invalidateTraderCache(env, username);
+  }
+
+  return json(result);
 }

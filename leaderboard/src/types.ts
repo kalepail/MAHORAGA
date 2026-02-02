@@ -3,18 +3,19 @@ export interface TraderRow {
   github_repo: string;
   asset_class: "stocks" | "crypto" | "both";
   joined_at: string;
-  equity: number;
-  total_pnl: number;
-  total_pnl_pct: number;
-  total_deposits: number;
+  equity: number | null;
+  total_pnl: number | null;
+  total_pnl_pct: number | null;
+  total_deposits: number | null;
   sharpe_ratio: number | null;
   win_rate: number | null;
   max_drawdown_pct: number | null;
-  num_trades: number;
+  num_trades: number | null;
   composite_score: number | null;
-  open_positions: number;
-  snapshot_date: string;
+  open_positions: number | null;
+  snapshot_date: string | null;
   sparkline: number[];
+  pending_sync?: boolean | number;
 }
 
 export interface LeaderboardResponse {
