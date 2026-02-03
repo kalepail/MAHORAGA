@@ -106,6 +106,9 @@ interface AgentConfig {
 
   // Custom ticker blacklist - user-defined symbols to never trade (e.g., insider trading restrictions)
   ticker_blacklist: string[];
+
+  // Allowed exchanges - only trade stocks listed on these exchanges (avoids OTC data issues)
+  allowed_exchanges: string[];
 }
 
 // [CUSTOMIZABLE] Add fields here when you add new data sources
@@ -300,6 +303,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   crypto_take_profit_pct: 10,
   crypto_stop_loss_pct: 5,
   ticker_blacklist: [],
+  allowed_exchanges: ["NYSE", "NASDAQ", "ARCA", "AMEX", "BATS"],
 };
 
 const DEFAULT_STATE: AgentState = {
@@ -2210,6 +2214,26 @@ Response format:
       const isCrypto = isCryptoSymbol(symbol, this.state.config.crypto_symbols || []);
       const orderSymbol = isCrypto ? normalizeCryptoSymbol(symbol) : symbol;
       const timeInForce = isCrypto ? "gtc" : "day";
+
+      if (!isCrypto) {
+        const allowedExchanges = this.state.config.allowed_exchanges ?? ["NYSE", "NASDAQ", "ARCA", "AMEX", "BATS"];
+        if (allowedExchanges.length > 0) {
+          const asset = await alpaca.trading.getAsset(symbol);
+          if (!asset) {
+            this.log("Executor", "buy_blocked", { symbol, reason: "Asset not found" });
+            return false;
+          }
+          if (!allowedExchanges.includes(asset.exchange)) {
+            this.log("Executor", "buy_blocked", { 
+              symbol, 
+              reason: "Exchange not allowed (OTC/foreign stocks have data issues)",
+              exchange: asset.exchange,
+              allowedExchanges 
+            });
+            return false;
+          }
+        }
+      }
 
       const order = await alpaca.trading.createOrder({
         symbol: orderSymbol,
