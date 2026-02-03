@@ -1,9 +1,5 @@
-- what happens when we select multiple paper accounts?
-- more educational tooltips for various stats
 
-- If we’re progressively updating players then won’t snapshots be weird? Or can we only update some values all at once or in blocks? Maybe that’s some of the issue with over writes? Updating one by one and cron updating? What is getting cron updated and what is getting updated in the queue?
-
-- Every 30 days we start over? Otherwise newcomers will struggle to compete. I see a filter by days, how does that work in practice?
+- rename or work in the sukuna name
 
 ---
 

@@ -7,3 +7,4 @@ dist-worker/
 !.dev.vars.example
 *.local
 worker-configuration.d.ts
+**/.claude/settings.json
