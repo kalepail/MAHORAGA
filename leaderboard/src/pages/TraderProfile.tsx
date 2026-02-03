@@ -3,7 +3,9 @@ import type { TraderProfile as TraderProfileType, Trade, EquityPoint } from "../
 import { MetricCard } from "../components/MetricCard";
 import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
+import { InfoIcon } from "../components/Tooltip";
 import { formatPercent, formatPnl, formatCurrency, formatMetric } from "../utils";
+import { METRIC_TOOLTIPS } from "../constants/tooltips";
 import clsx from "clsx";
 
 interface TraderProfileProps {
@@ -11,9 +13,14 @@ interface TraderProfileProps {
   navigate: (path: string) => void;
 }
 
+const TRADES_PER_PAGE = 100;
+
 export function TraderProfile({ username, navigate }: TraderProfileProps) {
   const [profile, setProfile] = useState<TraderProfileType | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [tradesOffset, setTradesOffset] = useState(0);
+  const [hasMoreTrades, setHasMoreTrades] = useState(false);
+  const [tradesLoading, setTradesLoading] = useState(false);
   const [equity, setEquity] = useState<EquityPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +51,9 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
         if (!r.ok) throw new Error(r.status === 404 ? "Agent not found" : "Failed to load profile");
         return r.json() as Promise<TraderProfileType>;
       }),
-      fetch(`/api/trader/${username}/trades?limit=50`, { signal: controller.signal }).then((r) => {
-        if (!r.ok) return { trades: [] };
-        return r.json() as Promise<{ trades: Trade[] }>;
+      fetch(`/api/trader/${username}/trades?limit=${TRADES_PER_PAGE}`, { signal: controller.signal }).then((r) => {
+        if (!r.ok) return { trades: [], meta: { limit: TRADES_PER_PAGE, offset: 0 } };
+        return r.json() as Promise<{ trades: Trade[]; meta: { limit: number; offset: number } }>;
       }),
       fetch(`/api/trader/${username}/equity?days=90`, { signal: controller.signal }).then((r) => {
         if (!r.ok) return { equity: [] };
@@ -56,6 +63,8 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       .then(([profileData, tradesData, equityData]) => {
         setProfile(profileData);
         setTrades(tradesData.trades);
+        setTradesOffset(0);
+        setHasMoreTrades(tradesData.trades.length === TRADES_PER_PAGE);
         setEquity(equityData.equity);
       })
       .catch((err) => {
@@ -68,6 +77,23 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
 
     return () => controller.abort();
   }, [username]);
+
+  const loadMoreTrades = async () => {
+    if (tradesLoading || !hasMoreTrades) return;
+    setTradesLoading(true);
+    const newOffset = tradesOffset + TRADES_PER_PAGE;
+    try {
+      const res = await fetch(`/api/trader/${username}/trades?limit=${TRADES_PER_PAGE}&offset=${newOffset}`);
+      if (res.ok) {
+        const data = await res.json() as { trades: Trade[] };
+        setTrades((prev) => [...prev, ...data.trades]);
+        setTradesOffset(newOffset);
+        setHasMoreTrades(data.trades.length === TRADES_PER_PAGE);
+      }
+    } finally {
+      setTradesLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -158,7 +184,10 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       {/* Equity curve */}
       {equityCurve.length > 1 && (
         <div className="hud-panel p-4 mb-4">
-          <div className="hud-label mb-2">Equity Curve (90D)</div>
+          <div className="hud-label mb-2 flex items-center gap-1.5">
+            Equity Curve (90D)
+            <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
+          </div>
           <div className="w-full overflow-hidden">
             <Sparkline
               data={equityCurve}
@@ -178,20 +207,24 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               label="ROI"
               value={formatPercent(snapshot.total_pnl_pct, 2)}
               positive={snapshot.total_pnl_pct >= 0}
+              tooltip={METRIC_TOOLTIPS.roi}
             />
             <MetricCard
               label="Total P&L"
               value={formatPnl(snapshot.total_pnl)}
               sub={`on ${formatCurrency(snapshot.total_deposits)} starting capital`}
               positive={snapshot.total_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.pnl}
             />
             <MetricCard
               label="Sharpe Ratio"
               value={formatMetric(snapshot.sharpe_ratio, 2)}
+              tooltip={METRIC_TOOLTIPS.sharpe}
             />
             <MetricCard
               label="Composite Score"
               value={formatMetric(snapshot.composite_score)}
+              tooltip={METRIC_TOOLTIPS.score}
             />
           </div>
 
@@ -200,20 +233,24 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               label="Win Rate"
               value={formatMetric(snapshot.win_rate, 1, "%")}
               sub={snapshot.win_rate !== null ? `${snapshot.num_winning_trades} winning days` : undefined}
+              tooltip={METRIC_TOOLTIPS.winRate}
             />
             <MetricCard
               label="Max Drawdown"
               value={formatMetric(snapshot.max_drawdown_pct, 1, "%")}
               positive={false}
+              tooltip={METRIC_TOOLTIPS.maxDrawdown}
             />
             <MetricCard
               label="Today"
               value={formatPnl(snapshot.day_pnl)}
               positive={snapshot.day_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.dayPnl}
             />
             <MetricCard
               label="Open Positions"
               value={String(snapshot.open_positions)}
+              tooltip={METRIC_TOOLTIPS.openPositions}
             />
           </div>
 
@@ -222,16 +259,19 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
             <MetricCard
               label="Equity"
               value={formatCurrency(snapshot.equity)}
+              tooltip={METRIC_TOOLTIPS.equity}
             />
             <MetricCard
               label="Unrealized P&L"
               value={formatPnl(snapshot.unrealized_pnl)}
               positive={snapshot.unrealized_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.unrealizedPnl}
             />
             <MetricCard
               label="Realized P&L"
               value={formatPnl(snapshot.realized_pnl)}
               positive={snapshot.realized_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.realizedPnl}
             />
           </div>
         </>
@@ -246,7 +286,12 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       )}
 
       {/* Trade history */}
-      <TradeHistoryTable trades={trades} />
+      <TradeHistoryTable
+        trades={trades}
+        hasMore={hasMoreTrades}
+        loading={tradesLoading}
+        onLoadMore={loadMoreTrades}
+      />
     </div>
   );
 }
@@ -255,69 +300,124 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
 // Extracted Component
 // ---------------------------------------------------------------------------
 
-function TradeHistoryTable({ trades }: { trades: Trade[] }) {
+interface TradeHistoryTableProps {
+  trades: Trade[];
+  hasMore: boolean;
+  loading: boolean;
+  onLoadMore: () => void;
+}
+
+function TradeHistoryTable({ trades, hasMore, loading, onLoadMore }: TradeHistoryTableProps) {
+  // Group trades by symbol, preserving time order within each group
+  const groupedTrades = trades.reduce<Record<string, Trade[]>>((acc, trade) => {
+    const key = trade.symbol;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(trade);
+    return acc;
+  }, {});
+
+  // Sort groups by most recent trade (first trade in each group since they're already time-sorted)
+  const sortedGroups = Object.keys(groupedTrades).sort((a, b) => {
+    const aTime = new Date(groupedTrades[a][0].filled_at).getTime();
+    const bTime = new Date(groupedTrades[b][0].filled_at).getTime();
+    return bTime - aTime;
+  });
+
   return (
     <div className="hud-panel">
       <div className="px-4 py-3 border-b border-hud-line">
         <span className="hud-label">Recent Trades</span>
+        {trades.length > 0 && (
+          <span className="hud-label text-hud-text-dim ml-2">({trades.length})</span>
+        )}
       </div>
       {trades.length === 0 ? (
         <div className="px-4 py-8 text-center">
           <span className="hud-label">No trades recorded yet</span>
         </div>
       ) : (
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-hud-line">
-              <th className="hud-label text-left px-4 py-2">Symbol</th>
-              <th className="hud-label text-left px-4 py-2">Side</th>
-              <th className="hud-label text-right px-4 py-2">Qty</th>
-              <th className="hud-label text-right px-4 py-2">Price</th>
-              <th className="hud-label text-right px-4 py-2">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trades.map((trade, i) => (
-              <tr key={i} className="border-b border-hud-line/50">
-                <td className="px-4 py-2">
-                  <span className="hud-value-sm text-hud-text-bright">
-                    {trade.symbol}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  <span
-                    className={clsx(
-                      "hud-value-sm uppercase",
-                      trade.side === "buy"
-                        ? "text-hud-success"
-                        : "text-hud-error"
-                    )}
-                  >
-                    {trade.side}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <span className="hud-value-sm">{trade.qty}</span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <span className="hud-value-sm">
-                    {formatCurrency(trade.price, 2)}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <span className="hud-value-sm text-hud-text-dim">
-                    {new Date(trade.filled_at).toLocaleString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </td>
+        <>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-hud-line">
+                <th className="hud-label text-left px-4 py-2 w-[30%]">Symbol</th>
+                <th className="hud-label text-left px-4 py-2 w-[15%]">Side</th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">Qty</th>
+                <th className="hud-label text-right px-4 py-2 w-[15%]">Price</th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">Time</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedGroups.map((symbol, groupIndex) => (
+                <>
+                  <tr key={`header-${symbol}`} className="border-t border-hud-line border-b border-hud-line/50 bg-hud-bg-row-header">
+                    {/* Extra top padding after first group for visual separation between symbol blocks */}
+                    <td colSpan={5} className={clsx("px-4 pb-2", groupIndex === 0 ? "pt-2" : "pt-5")}>
+                      <span className="hud-value-sm text-hud-text-bright">
+                        {symbol}
+                      </span>
+                      <span className="hud-label text-hud-text-dim ml-2">
+                        ({groupedTrades[symbol].length} trade{groupedTrades[symbol].length !== 1 ? "s" : ""})
+                      </span>
+                    </td>
+                  </tr>
+                  {groupedTrades[symbol].map((trade, i) => (
+                    <tr
+                      key={`${symbol}-${i}`}
+                      className={clsx(
+                        "border-b border-hud-line/50",
+                        i % 2 === 1 && "bg-hud-bg-row-odd"
+                      )}
+                    >
+                      <td className="px-4 py-2"></td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={clsx(
+                            "hud-value-sm uppercase",
+                            trade.side === "buy"
+                              ? "text-hud-success"
+                              : "text-hud-error"
+                          )}
+                        >
+                          {trade.side}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <span className="hud-value-sm">{trade.qty}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <span className="hud-value-sm">
+                          {formatCurrency(trade.price, 2)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <span className="hud-value-sm text-hud-text-dim">
+                          {new Date(trade.filled_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+          </table>
+          {hasMore && (
+            <div className="px-4 py-3 text-center border-t border-hud-line">
+              <button
+                onClick={onLoadMore}
+                disabled={loading}
+                className="hud-button text-[10px]"
+              >
+                {loading ? "Loading..." : "Load More"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

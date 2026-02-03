@@ -3,6 +3,8 @@
 @theme {
   --color-hud-bg: #0a0c0e;
   --color-hud-bg-panel: #0d1012;
+  --color-hud-bg-row-odd: rgba(122, 155, 168, 0.02);
+  --color-hud-bg-row-header: rgba(122, 155, 168, 0.04);
 
   --color-hud-primary: #7a9ba8;
   --color-hud-dim: #3a4a52;

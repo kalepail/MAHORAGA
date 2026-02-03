@@ -10,7 +10,9 @@ import type {
 } from "../types";
 import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
+import { InfoIcon } from "../components/Tooltip";
 import { pnlColor, formatPercent, formatPnl, formatMetric } from "../utils";
+import { METRIC_TOOLTIPS, SORT_TOOLTIPS, SORT_LABELS } from "../constants/tooltips";
 
 interface LeaderboardProps {
   navigate: (path: string) => void;
@@ -127,15 +129,45 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
             <tr className="border-b border-hud-line">
               <th className="hud-label text-left px-4 py-3 w-[50px]">#</th>
               <th className="hud-label text-left px-4 py-3">Agent</th>
-              <th className="hud-label text-right px-4 py-3">Score</th>
-              <th className="hud-label text-right px-4 py-3">ROI %</th>
-              <th className="hud-label text-right px-4 py-3">P&L</th>
-              <th className="hud-label text-right px-4 py-3">Sharpe</th>
-              <th className="hud-label text-right px-4 py-3">Win Rate</th>
-              <th className="hud-label text-right px-4 py-3">MDD</th>
-              <th className="hud-label text-right px-4 py-3">Trades</th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  Score <InfoIcon tooltip={METRIC_TOOLTIPS.score} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  ROI % <InfoIcon tooltip={METRIC_TOOLTIPS.roi} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  P&L <InfoIcon tooltip={METRIC_TOOLTIPS.pnl} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  Sharpe <InfoIcon tooltip={METRIC_TOOLTIPS.sharpe} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  Win Rate <InfoIcon tooltip={METRIC_TOOLTIPS.winRate} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  MDD <InfoIcon tooltip={METRIC_TOOLTIPS.maxDrawdown} />
+                </span>
+              </th>
+              <th className="hud-label text-right px-4 py-3">
+                <span className="inline-flex items-center gap-1.5">
+                  Trades <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
+                </span>
+              </th>
               <th className="hud-label text-right px-4 py-3 w-[100px]">
-                Equity
+                <span className="inline-flex items-center gap-1.5">
+                  Equity <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
+                </span>
               </th>
             </tr>
           </thead>
@@ -186,6 +218,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
                   key={trader.username}
                   trader={trader}
                   rank={i + 1}
+                  isOdd={i % 2 === 1}
                   onClick={() => navigate(`/trader/${trader.username}`)}
                 />
               ))}
@@ -247,11 +280,12 @@ function FilterBar({
       {/* Period */}
       <div className="flex items-center gap-1">
         <span className="hud-label mr-2">Period</span>
+        <InfoIcon tooltip={METRIC_TOOLTIPS.period} position="bottom" />
         {PERIODS.map((p) => (
           <button
             key={p.value}
             onClick={() => onPeriodChange(p.value)}
-            className={pillClass(period === p.value)}
+            className={clsx(pillClass(period === p.value), "ml-1 first:ml-1")}
           >
             {p.label}
           </button>
@@ -263,10 +297,25 @@ function FilterBar({
       {/* Sort */}
       <div className="flex items-center gap-1">
         <span className="hud-label mr-2">Sort</span>
+        <InfoIcon
+          tooltip={
+            <div>
+              <div className="text-hud-text-bright mb-2">Ranking Metrics</div>
+              {SORTS.map((s) => (
+                <div key={s.value} className="mb-2 last:mb-0">
+                  <span className="text-hud-text-bright">{SORT_LABELS[s.value]}:</span>{" "}
+                  <span className="text-hud-text-dim">{SORT_TOOLTIPS[s.value]}</span>
+                </div>
+              ))}
+            </div>
+          }
+          position="bottom"
+          maxWidth={340}
+        />
         <select
           value={sort}
           onChange={(e) => onSortChange(e.target.value as SortField)}
-          className="hud-input text-[11px] py-1"
+          className="hud-input text-[11px] py-1 ml-1"
         >
           {SORTS.map((s) => (
             <option key={s.value} value={s.value}>
@@ -281,11 +330,12 @@ function FilterBar({
       {/* Asset class */}
       <div className="flex items-center gap-1">
         <span className="hud-label mr-2">Asset</span>
+        <InfoIcon tooltip={METRIC_TOOLTIPS.asset} position="bottom" />
         {ASSET_FILTERS.map((a) => (
           <button
             key={a.value}
             onClick={() => onAssetFilterChange(a.value)}
-            className={pillClass(assetFilter === a.value)}
+            className={clsx(pillClass(assetFilter === a.value), "ml-1 first:ml-1")}
           >
             {a.label}
           </button>
@@ -299,10 +349,11 @@ function FilterBar({
 interface LeaderboardRowProps {
   trader: TraderRow;
   rank: number;
+  isOdd: boolean;
   onClick: () => void;
 }
 
-function LeaderboardRow({ trader, rank, onClick }: LeaderboardRowProps) {
+function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
   const syncing = !!trader.pending_sync;
   // Account has data but score not yet computed by cron (runs every 15 min)
   const isNew = !syncing && trader.composite_score === null;
@@ -310,7 +361,10 @@ function LeaderboardRow({ trader, rank, onClick }: LeaderboardRowProps) {
 
   return (
     <tr
-      className="border-b border-hud-line/50 hover:bg-hud-bg-panel/50 cursor-pointer transition-colors"
+      className={clsx(
+        "border-b border-hud-line/50 hover:bg-hud-bg-panel/50 cursor-pointer transition-colors",
+        isOdd && "bg-hud-bg-row-odd"
+      )}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
