@@ -11,7 +11,9 @@ import { NotificationBell } from './components/NotificationBell'
 import { Tooltip, TooltipContent } from './components/Tooltip'
 import type { Status, Config, LogEntry, Signal, Position, SignalResearch, PortfolioSnapshot } from './types'
 
-const API_BASE = '/api'
+// In production, VITE_API_BASE is set to the full worker URL (e.g., https://mahoraga.tyler.workers.dev/agent)
+// In development, it defaults to '/api' which gets proxied to the local worker
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 function getApiToken(): string {
   return localStorage.getItem('mahoraga_api_token') || (window as unknown as { VITE_MAHORAGA_API_TOKEN?: string }).VITE_MAHORAGA_API_TOKEN || ''

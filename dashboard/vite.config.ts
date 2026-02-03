@@ -6,6 +6,11 @@ const apiTarget = process.env.MAHORAGA_API_URL || `http://localhost:${process.en
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    // In production, API_BASE will be the full worker URL
+    // In development, it stays as '/api' and gets proxied
+    'import.meta.env.VITE_API_BASE': JSON.stringify(process.env.VITE_API_BASE || '/api'),
+  },
   server: {
     port: 3000,
     proxy: {

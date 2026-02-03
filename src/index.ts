@@ -31,6 +31,32 @@ function unauthorizedResponse(): Response {
   );
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400",
+};
+
+function withCors(response: Response): Response {
+  const newHeaders = new Headers(response.headers);
+  Object.entries(CORS_HEADERS).forEach(([key, value]) => {
+    newHeaders.set(key, value);
+  });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+}
+
+function corsPreflightResponse(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export default {
   async fetch(
     request: Request,
@@ -38,6 +64,11 @@ export default {
     ctx: ExecutionContext
   ): Promise<Response> {
     const url = new URL(request.url);
+
+    // Handle CORS preflight for /agent/* routes
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/agent")) {
+      return corsPreflightResponse();
+    }
 
     if (url.pathname === "/health") {
       return new Response(
@@ -82,11 +113,12 @@ export default {
       const agentPath = url.pathname.replace("/agent", "") || "/status";
       const agentUrl = new URL(agentPath, "http://harness");
       agentUrl.search = url.search;
-      return stub.fetch(new Request(agentUrl.toString(), {
+      const response = await stub.fetch(new Request(agentUrl.toString(), {
         method: request.method,
         headers: request.headers,
         body: request.body,
       }));
+      return withCors(response);
     }
 
     return new Response("Not found", { status: 404 });
