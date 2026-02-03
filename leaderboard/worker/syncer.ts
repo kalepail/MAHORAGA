@@ -93,25 +93,25 @@ export class SyncerDO extends DurableObject<Env> {
 
       if (hasStoredCount) {
         // Incremental count: only fetch orders created after last count
+        // Uses ASC pagination so we can continue from where we stopped
         const incrementalResult = await fetchFilledOrderCountSince(
           accessToken,
           storedCounts.last_count_order_created_at!,
           10 // Max 10 pages = 5000 new orders
         );
 
-        // Always use the incremental count, even if we hit the page limit.
-        // If we hit the limit, we've counted up to 5000 new orders and captured
-        // the timestamp of where we stopped. The next sync will continue from
-        // there and eventually catch up. This avoids the unbounded full recount.
+        // Add the new count to our running total
         filledCount = storedCounts.lifetime_trade_count! + incrementalResult.newCount;
-        // Use new timestamp if we got new orders, otherwise keep the old one
-        newLastCountOrderCreatedAt = incrementalResult.newestOrderCreatedAt ??
+
+        // Update checkpoint to where we stopped (or keep old if no new orders)
+        // Because we paginate ASC (oldest→newest), this is always safe:
+        // - If we finished: checkpoint is the newest order, we're caught up
+        // - If we hit limit: checkpoint is where we stopped, next sync continues from there
+        newLastCountOrderCreatedAt = incrementalResult.lastProcessedOrderCreatedAt ??
                                      storedCounts.last_count_order_created_at;
 
         if (incrementalResult.hitPageLimit) {
-          // Log for observability — count may be temporarily understated but
-          // will catch up over subsequent syncs
-          console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue catching up next sync`);
+          console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue from checkpoint next sync`);
         }
       } else {
         // No stored count — do full count

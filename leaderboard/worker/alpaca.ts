@@ -312,9 +312,9 @@ export async function fetchTotalFilledOrderCount(
 export interface IncrementalTradeCountResult {
   /** Number of new filled orders since the 'after' timestamp. */
   newCount: number;
-  /** created_at of the newest order in this batch (for next incremental count). */
-  newestOrderCreatedAt: string | null;
-  /** True if we hit the page limit and may have missed orders. Caller should do full recount. */
+  /** created_at of the last order we processed. Use this as the next 'after' value. */
+  lastProcessedOrderCreatedAt: string | null;
+  /** True if we hit the page limit. Count is still accurate for orders processed. */
   hitPageLimit: boolean;
 }
 
@@ -324,10 +324,14 @@ export interface IncrementalTradeCountResult {
  * Used for incremental trade counting: instead of paginating through ALL orders
  * every sync, we only count new orders since the last sync.
  *
+ * IMPORTANT: Paginates in ASCENDING order (oldest → newest). This ensures that
+ * when we hit the page limit, we can continue from `lastProcessedOrderCreatedAt`
+ * on the next sync without gaps or duplicates. The 'after' parameter is exclusive.
+ *
  * @param token - Alpaca access token
  * @param after - ISO 8601 timestamp. Only orders created AFTER this (exclusive) are counted.
  * @param maxPages - Safety limit on pagination (default 10 = 5000 orders max)
- * @returns Count of new filled orders, newest timestamp, and whether page limit was hit
+ * @returns Count of new filled orders, last processed timestamp, and whether page limit was hit
  */
 export async function fetchFilledOrderCountSince(
   token: string,
@@ -335,19 +339,17 @@ export async function fetchFilledOrderCountSince(
   maxPages = 10
 ): Promise<IncrementalTradeCountResult> {
   let newCount = 0;
-  let newestOrderCreatedAt: string | null = null;
-  let until: string | null = null;
+  let lastProcessedOrderCreatedAt: string | null = null;
+  let currentAfter = after;
   let pageCount = 0;
 
   for (; pageCount < maxPages; pageCount++) {
     const params = new URLSearchParams({
       status: "closed",
       limit: "500",
-      direction: "desc",
-      after, // Only orders created AFTER this timestamp (exclusive)
+      direction: "asc", // Oldest first — so we can continue from where we stopped
+      after: currentAfter,
     });
-    // For subsequent pages, also add 'until' to narrow the window
-    if (until) params.set("until", until);
 
     const res = await fetch(`${BASE}/v2/orders?${params}`, {
       headers: headers(token),
@@ -360,23 +362,22 @@ export async function fetchFilledOrderCountSince(
     const orders = (await res.json()) as Record<string, unknown>[];
     if (orders.length === 0) break;
 
-    // On first page, capture the newest order's created_at
-    if (newestOrderCreatedAt === null && orders.length > 0) {
-      newestOrderCreatedAt = orders[0].created_at as string;
-    }
-
     const filled = orders.filter((o) => o.status === "filled");
     newCount += filled.length;
 
+    // Track the last (newest) order we processed — this becomes our next checkpoint
+    const lastOrder = orders[orders.length - 1];
+    lastProcessedOrderCreatedAt = lastOrder.created_at as string;
+
     if (orders.length < 500) break;
 
-    // Use oldest order's created_at for next page
-    until = orders[orders.length - 1].created_at as string;
+    // For next page, get orders after the last one we saw
+    currentAfter = lastProcessedOrderCreatedAt;
   }
 
   return {
     newCount,
-    newestOrderCreatedAt,
+    lastProcessedOrderCreatedAt,
     hitPageLimit: pageCount >= maxPages,
   };
 }
