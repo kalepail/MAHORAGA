@@ -10,7 +10,7 @@
  * - leaderboard:{period}:{sort}:{assetClass}:{minTrades}
  * - leaderboard:stats
  * - trader:{username}:profile
- * - trader:{username}:trades:{limit}:{offset}
+ * - trader:{username}:trades:{limit}:{offset} (offset always 0, kept for API compatibility)
  * - trader:{username}:equity:{days}
  */
 

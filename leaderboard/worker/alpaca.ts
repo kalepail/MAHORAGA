@@ -216,7 +216,7 @@ export async function fetchTotalDeposits(token: string): Promise<number> {
  */
 export async function fetchClosedOrders(
   token: string,
-  limit = 200
+  limit = 100
 ): Promise<AlpacaOrder[]> {
   const params = new URLSearchParams({
     status: "closed",

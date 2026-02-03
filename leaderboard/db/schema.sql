@@ -95,4 +95,3 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_trader ON trades(trader_id, filled_at DESC);
-CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);

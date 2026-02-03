@@ -19,9 +19,6 @@ const TRADES_PER_PAGE = 100;
 export function TraderProfile({ username, navigate }: TraderProfileProps) {
   const [profile, setProfile] = useState<TraderProfileType | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [tradesOffset, setTradesOffset] = useState(0);
-  const [hasMoreTrades, setHasMoreTrades] = useState(false);
-  const [tradesLoading, setTradesLoading] = useState(false);
   const [equity, setEquity] = useState<EquityPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +50,8 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
         return r.json() as Promise<TraderProfileType>;
       }),
       fetch(`/api/trader/${username}/trades?limit=${TRADES_PER_PAGE}`, { signal: controller.signal }).then((r) => {
-        if (!r.ok) return { trades: [], meta: { limit: TRADES_PER_PAGE, offset: 0 } };
-        return r.json() as Promise<{ trades: Trade[]; meta: { limit: number; offset: number } }>;
+        if (!r.ok) return { trades: [] };
+        return r.json() as Promise<{ trades: Trade[] }>;
       }),
       fetch(`/api/trader/${username}/equity?days=90`, { signal: controller.signal }).then((r) => {
         if (!r.ok) return { equity: [] };
@@ -64,8 +61,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       .then(([profileData, tradesData, equityData]) => {
         setProfile(profileData);
         setTrades(tradesData.trades);
-        setTradesOffset(0);
-        setHasMoreTrades(tradesData.trades.length === TRADES_PER_PAGE);
         setEquity(equityData.equity);
       })
       .catch((err) => {
@@ -78,23 +73,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
 
     return () => controller.abort();
   }, [username]);
-
-  const loadMoreTrades = async () => {
-    if (tradesLoading || !hasMoreTrades) return;
-    setTradesLoading(true);
-    const newOffset = tradesOffset + TRADES_PER_PAGE;
-    try {
-      const res = await fetch(`/api/trader/${username}/trades?limit=${TRADES_PER_PAGE}&offset=${newOffset}`);
-      if (res.ok) {
-        const data = await res.json() as { trades: Trade[] };
-        setTrades((prev) => [...prev, ...data.trades]);
-        setTradesOffset(newOffset);
-        setHasMoreTrades(data.trades.length === TRADES_PER_PAGE);
-      }
-    } finally {
-      setTradesLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -287,12 +265,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       )}
 
       {/* Trade history */}
-      <TradeHistoryTable
-        trades={trades}
-        hasMore={hasMoreTrades}
-        loading={tradesLoading}
-        onLoadMore={loadMoreTrades}
-      />
+      <TradeHistoryTable trades={trades} />
     </div>
   );
 }
@@ -303,12 +276,9 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
 
 interface TradeHistoryTableProps {
   trades: Trade[];
-  hasMore: boolean;
-  loading: boolean;
-  onLoadMore: () => void;
 }
 
-function TradeHistoryTable({ trades, hasMore, loading, onLoadMore }: TradeHistoryTableProps) {
+function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
   // Group trades by symbol, preserving time order within each group
   const groupedTrades = trades.reduce<Record<string, Trade[]>>((acc, trade) => {
     const key = trade.symbol;
@@ -407,17 +377,6 @@ function TradeHistoryTable({ trades, hasMore, loading, onLoadMore }: TradeHistor
               ))}
             </tbody>
           </table>
-          {hasMore && (
-            <div className="px-4 py-3 text-center border-t border-hud-line">
-              <button
-                onClick={onLoadMore}
-                disabled={loading}
-                className="hud-button text-[10px]"
-              >
-                {loading ? "Loading..." : "Load More"}
-              </button>
-            </div>
-          )}
         </>
       )}
     </div>

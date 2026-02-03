@@ -116,9 +116,15 @@ export interface StaleTraderRow {
   sync_tier: number;
 }
 
-/** Aggregate stats query result. */
-export interface StatsDbRow {
+/** Aggregate stats query result: trader count. */
+export interface TraderCountRow {
   total_traders: number;
+}
+
+/** Aggregate stats query result: P&L and trades totals. */
+export interface PnlAndTradesRow {
+  total_pnl: number;
+  total_trades: number;
 }
 
 /** Normalization ranges for composite score calculation. */

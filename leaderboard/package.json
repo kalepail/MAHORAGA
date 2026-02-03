@@ -12,7 +12,7 @@
     "db:migrate:local": "wrangler d1 execute mahoraga-leaderboard-db --local --file=./db/schema.sql",
     "db:migrate:remote": "wrangler d1 execute mahoraga-leaderboard-db --remote --file=./db/schema.sql",
     "types": "wrangler types",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --build --noEmit"
   },
   "dependencies": {
     "clsx": "^2.1.1",

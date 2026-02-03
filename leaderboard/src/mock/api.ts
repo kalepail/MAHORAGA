@@ -75,7 +75,7 @@ export function mockFetch(
     const response: LeaderboardResponse = {
       traders,
       meta: {
-        limit: 50,
+        limit: 100,
         offset: 0,
         period,
         sort,

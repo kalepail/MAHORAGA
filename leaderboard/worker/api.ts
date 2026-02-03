@@ -29,6 +29,9 @@ import type {
   TraderDbRow,
   SnapshotDbRow,
   OAuthTokenDbRow,
+  EquityHistoryDbRow,
+  TraderCountRow,
+  PnlAndTradesRow,
 } from "./types";
 
 const ALPACA_PAPER_API = "https://paper-api.alpaca.markets";
@@ -195,7 +198,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   const tradersWithSparklines = result.results.map((trader, i) => ({
     ...trader,
     sparkline: (sparklineResults[i]?.results ?? [])
-      .map((r) => (r as Record<string, unknown>).equity as number)
+      .map((r) => (r as Pick<EquityHistoryDbRow, "equity">).equity)
       .reverse(),
   }));
 
@@ -225,7 +228,7 @@ export async function getLeaderboardStats(env: Env): Promise<Response> {
 export async function queryStats(env: Env) {
   // Note: We use SUM(num_trades) from latest snapshots rather than COUNT(*)
   // from the trades table, because the trades table only holds the most recent
-  // 200 orders per trader (syncer deletes and reinserts on each sync).
+  // 100 orders per trader (syncer deletes and reinserts on each sync).
   // The num_trades column in snapshots comes from fetchTotalFilledOrderCount()
   // which paginates through ALL closed orders for the true lifetime count.
   // Use window function instead of self-join for latest snapshot per trader.
@@ -247,13 +250,13 @@ export async function queryStats(env: Env) {
     `),
   ]);
 
-  const stats = statsResult.results[0] as Record<string, unknown> | undefined;
-  const pnlAndTrades = pnlAndTradesResult.results[0] as Record<string, unknown> | undefined;
+  const stats = statsResult.results[0] as TraderCountRow | undefined;
+  const pnlAndTrades = pnlAndTradesResult.results[0] as PnlAndTradesRow | undefined;
 
   return {
-    total_traders: (stats?.total_traders as number) || 0,
-    total_trades: (pnlAndTrades?.total_trades as number) || 0,
-    total_pnl: (pnlAndTrades?.total_pnl as number) || 0,
+    total_traders: stats?.total_traders ?? 0,
+    total_trades: pnlAndTrades?.total_trades ?? 0,
+    total_pnl: pnlAndTrades?.total_pnl ?? 0,
   };
 }
 
@@ -325,7 +328,7 @@ export async function getTraderEquity(
   env: Env
 ): Promise<Response> {
   const url = new URL(request.url);
-  const days = Math.min(safeParseInt(url.searchParams.get("days"), 90), 365);
+  const days = Math.min(safeParseInt(url.searchParams.get("days"), 90), 90);
 
   const cached = await getCachedTraderEquity(env, username, days);
   if (cached) {

@@ -78,9 +78,63 @@ interface AgentSeed {
   joined_days_ago: number;
   seed: number;
   symbols: string[];
+  /** Simulates a trader whose first sync is still in progress */
+  _pendingSync?: boolean;
+  /** Simulates a trader with insufficient data for composite score */
+  _nullScore?: boolean;
 }
 
 const AGENTS: AgentSeed[] = [
+  {
+    username: "fresh_start",
+    github_repo: "https://github.com/fresh-start/mahoraga-agent",
+    asset_class: "stocks",
+    initial_equity: 100000,
+    equity: 100000,
+    total_deposits: 100000,
+    total_pnl: 0,
+    total_pnl_pct: 0,
+    sharpe_ratio: 0,
+    win_rate: 0,
+    max_drawdown_pct: 0,
+    num_trades: 0,
+    num_winning_trades: 0,
+    composite_score: 0, // Will be set to null in output
+    open_positions: 0,
+    unrealized_pnl: 0,
+    realized_pnl: 0,
+    day_pnl: 0,
+    cash: 100000,
+    joined_days_ago: 1,
+    seed: 9009,
+    symbols: ["AAPL", "MSFT"],
+    _pendingSync: true,
+  },
+  {
+    username: "new_trader",
+    github_repo: "https://github.com/new-trader/mahoraga-agent",
+    asset_class: "crypto",
+    initial_equity: 100000,
+    equity: 101500,
+    total_deposits: 100000,
+    total_pnl: 1500,
+    total_pnl_pct: 1.5,
+    sharpe_ratio: 0.8,
+    win_rate: 55,
+    max_drawdown_pct: 2.1,
+    num_trades: 12,
+    num_winning_trades: 7,
+    composite_score: 0, // Will be set to null in output (not enough data yet)
+    open_positions: 1,
+    unrealized_pnl: 200,
+    realized_pnl: 1300,
+    day_pnl: 150,
+    cash: 85000,
+    joined_days_ago: 3,
+    seed: 9010,
+    symbols: ["BTC/USD", "ETH/USD"],
+    _nullScore: true,
+  },
   {
     username: "signal_alpha",
     github_repo: "https://github.com/signal-alpha/mahoraga-agent",
@@ -381,18 +435,19 @@ export const mockTraders: TraderRow[] = AGENTS.map((a) => ({
   github_repo: a.github_repo,
   asset_class: a.asset_class,
   joined_at: buildJoinedAt(a.joined_days_ago),
-  equity: a.equity,
-  total_pnl: a.total_pnl,
-  total_pnl_pct: a.total_pnl_pct,
-  total_deposits: a.total_deposits,
-  sharpe_ratio: a.sharpe_ratio,
-  win_rate: a.win_rate,
-  max_drawdown_pct: a.max_drawdown_pct,
-  num_trades: a.num_trades,
-  composite_score: a.composite_score,
-  open_positions: a.open_positions,
-  snapshot_date: snapshotDate,
-  sparkline: buildSparkline(a),
+  equity: a._pendingSync ? null : a.equity,
+  total_pnl: a._pendingSync ? null : a.total_pnl,
+  total_pnl_pct: a._pendingSync ? null : a.total_pnl_pct,
+  total_deposits: a._pendingSync ? null : a.total_deposits,
+  sharpe_ratio: a._pendingSync ? null : a.sharpe_ratio,
+  win_rate: a._pendingSync ? null : a.win_rate,
+  max_drawdown_pct: a._pendingSync ? null : a.max_drawdown_pct,
+  num_trades: a._pendingSync ? null : a.num_trades,
+  composite_score: (a._pendingSync || a._nullScore) ? null : a.composite_score,
+  open_positions: a._pendingSync ? null : a.open_positions,
+  snapshot_date: a._pendingSync ? null : snapshotDate,
+  sparkline: a._pendingSync ? [] : buildSparkline(a),
+  pending_sync: a._pendingSync ? 1 : undefined,
 }));
 
 export const mockProfiles: Record<string, TraderProfile> = Object.fromEntries(
@@ -405,9 +460,9 @@ export const mockProfiles: Record<string, TraderProfile> = Object.fromEntries(
         github_repo: a.github_repo,
         asset_class: a.asset_class,
         joined_at: buildJoinedAt(a.joined_days_ago),
-        last_synced_at: lastSyncedAt,
+        last_synced_at: a._pendingSync ? null : lastSyncedAt,
       },
-      snapshot: {
+      snapshot: a._pendingSync ? null : {
         equity: a.equity,
         cash: a.cash,
         total_deposits: a.total_deposits,
@@ -422,7 +477,7 @@ export const mockProfiles: Record<string, TraderProfile> = Object.fromEntries(
         max_drawdown_pct: a.max_drawdown_pct,
         sharpe_ratio: a.sharpe_ratio,
         open_positions: a.open_positions,
-        composite_score: a.composite_score,
+        composite_score: a._nullScore ? null : a.composite_score,
         snapshot_date: snapshotDate,
       },
     },

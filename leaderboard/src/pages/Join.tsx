@@ -10,12 +10,11 @@ export function Join() {
 
   // Lock body scroll when modal is open
   useEffect(() => {
-    if (showDisclosure) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
+    if (!showDisclosure) return;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [showDisclosure]);
 
   function handleFormSubmit(e: React.FormEvent) {

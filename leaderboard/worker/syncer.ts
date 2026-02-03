@@ -64,7 +64,7 @@ export class SyncerDO extends DurableObject<Env> {
           fetchPositions(accessToken),
           fetchPortfolioHistory(accessToken, { period: "all", timeframe: "1D" }),
           fetchTotalDeposits(accessToken),
-          fetchClosedOrders(accessToken, 200),
+          fetchClosedOrders(accessToken, 100),
         ]);
 
       // ---------------------------------------------------------------
@@ -88,27 +88,29 @@ export class SyncerDO extends DurableObject<Env> {
       let filledCount: number;
       let newLastCountOrderCreatedAt: string | null;
 
-      const hasStoredCount = storedCounts?.lifetime_trade_count !== null &&
-                             storedCounts?.last_count_order_created_at !== null;
+      // Check if we have stored incremental counting data
+      const storedLifetimeCount = storedCounts?.lifetime_trade_count;
+      const storedLastOrderCreatedAt = storedCounts?.last_count_order_created_at;
 
-      if (hasStoredCount) {
+      if (storedLifetimeCount !== null && storedLifetimeCount !== undefined &&
+          storedLastOrderCreatedAt !== null && storedLastOrderCreatedAt !== undefined) {
         // Incremental count: only fetch orders created after last count
         // Uses ASC pagination so we can continue from where we stopped
         const incrementalResult = await fetchFilledOrderCountSince(
           accessToken,
-          storedCounts.last_count_order_created_at!,
+          storedLastOrderCreatedAt,
           10 // Max 10 pages = 5000 new orders
         );
 
         // Add the new count to our running total
-        filledCount = storedCounts.lifetime_trade_count! + incrementalResult.newCount;
+        filledCount = storedLifetimeCount + incrementalResult.newCount;
 
         // Update checkpoint to where we stopped (or keep old if no new orders)
         // Because we paginate ASC (oldest→newest), this is always safe:
         // - If we finished: checkpoint is the newest order, we're caught up
         // - If we hit limit: checkpoint is where we stopped, next sync continues from there
         newLastCountOrderCreatedAt = incrementalResult.lastProcessedOrderCreatedAt ??
-                                     storedCounts.last_count_order_created_at;
+                                     storedLastOrderCreatedAt;
 
         if (incrementalResult.hitPageLimit) {
           console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue from checkpoint next sync`);
@@ -318,13 +320,13 @@ export class SyncerDO extends DurableObject<Env> {
       await this.env.DB.batch(statements);
 
       // 3. Replace equity history with atomic delete + insert batches.
-      //    Stores up to 365 daily data points from Alpaca's portfolio history.
+      //    Stores up to 90 daily data points from Alpaca's portfolio history.
       //    Used for sparklines on the leaderboard (last 30 points) and the
       //    equity curve chart on trader profiles (up to 90 days displayed).
       //
       //    Safety: Each batch includes DELETE (idempotent) + INSERTs so that
       //    if a batch fails mid-way, re-running from scratch is safe.
-      const maxPoints = Math.min(history.timestamp.length, 365);
+      const maxPoints = Math.min(history.timestamp.length, 90);
       const startIdx = Math.max(0, history.timestamp.length - maxPoints);
 
       const equityInserts: D1PreparedStatement[] = [];
@@ -362,11 +364,11 @@ export class SyncerDO extends DurableObject<Env> {
       }
 
       // 4. Replace recent trades with atomic delete + insert batches.
-      //    Stores the latest 200 filled orders for display on the trader
+      //    Stores the latest 100 filled orders for display on the trader
       //    profile page. This is NOT the total trade count — that comes from
       //    fetchTotalFilledOrderCount() which paginates through all orders.
       const tradeInserts: D1PreparedStatement[] = [];
-      for (const order of recentOrders.slice(0, 200)) {
+      for (const order of recentOrders.slice(0, 100)) {
         if (!order.filled_at || !order.filled_avg_price) continue;
 
         const assetClass = order.asset_class === "crypto" ? "crypto" : "stocks";
