@@ -1,4 +1,4 @@
--- MAHORAGA Leaderboard Schema
+-- Sakuna — Maharaga Leaderboard Schema
 
 -- Registered traders
 CREATE TABLE IF NOT EXISTS traders (

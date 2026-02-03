@@ -1,3 +1,5 @@
+import { FULL_BRAND_NAME } from "../branding";
+
 interface PrivacyProps {
   navigate: (path: string) => void;
 }
@@ -5,7 +7,7 @@ interface PrivacyProps {
 export function Privacy({ navigate }: PrivacyProps) {
   return (
     <div className="max-w-[700px] mx-auto">
-      <title>Privacy Policy | MAHORAGA</title>
+      <title>{`Privacy Policy | ${FULL_BRAND_NAME}`}</title>
       <div className="mb-8">
         <h1 className="hud-value-xl mb-3">Privacy Policy</h1>
         <p className="hud-label">Last updated: February 2, 2026</p>
@@ -14,7 +16,7 @@ export function Privacy({ navigate }: PrivacyProps) {
       <section className="hud-panel p-6 mb-4">
         <h2 className="hud-value-md text-hud-text-bright mb-3">Overview</h2>
         <p className="hud-value-sm text-hud-text-dim leading-relaxed">
-          The MAHORAGA Leaderboard (&quot;the Service&quot;) is a community
+          The {FULL_BRAND_NAME} (&quot;the Service&quot;) is a community
           competition platform for autonomous trading agents. This Privacy
           Policy explains what data we collect, how we use it, and your rights
           regarding that data.
@@ -272,7 +274,7 @@ export function Privacy({ navigate }: PrivacyProps) {
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            MAHORAGA GitHub repository
+            Maharaga GitHub repository
           </a>
           .
         </p>

@@ -59,20 +59,20 @@ export function generateTraderMetaTags(trader: TraderSEOData): TraderMetaTags {
   const winRateStr = trader.win_rate !== null ? `${trader.win_rate.toFixed(0)}%` : "N/A";
   const scoreStr = trader.composite_score !== null ? trader.composite_score.toFixed(0) : "NEW";
 
-  const title = `${trader.username} | AI Trading Bot Performance | MAHORAGA`;
+  const title = `${trader.username} | AI Trading Bot Performance | Sakuna — Maharaga Leaderboard`;
   const description = trader.composite_score !== null
-    ? `${trader.username} trading bot: ${roiStr} ROI, ${sharpeStr} Sharpe, ${winRateStr} win rate. Score: ${scoreStr}/100. View live performance on the MAHORAGA algorithmic trading leaderboard.`
-    : `${trader.username} is a new trading bot on the MAHORAGA algorithmic trading leaderboard. Performance metrics are being calculated.`;
+    ? `${trader.username} trading bot: ${roiStr} ROI, ${sharpeStr} Sharpe, ${winRateStr} win rate. Score: ${scoreStr}/100. View live performance on the Sakuna — Maharaga Leaderboard.`
+    : `${trader.username} is a new trading bot on the Sakuna — Maharaga Leaderboard. Performance metrics are being calculated.`;
   const url = `https://sukuna.dev/trader/${trader.username}`;
 
   return {
     title: `<title>${escapeHtml(title)}</title>`,
     description: `<meta name="description" content="${escapeHtml(description)}" />`,
     canonical: `<link rel="canonical" href="${escapeHtml(url)}" />`,
-    ogTitle: `<meta property="og:title" content="${escapeHtml(trader.username)} | ${roiStr} ROI | MAHORAGA" />`,
+    ogTitle: `<meta property="og:title" content="${escapeHtml(trader.username)} | ${roiStr} ROI | Sakuna — Maharaga Leaderboard" />`,
     ogDescription: `<meta property="og:description" content="${escapeHtml(description)}" />`,
     ogUrl: `<meta property="og:url" content="${escapeHtml(url)}" />`,
-    twitterTitle: `<meta name="twitter:title" content="${escapeHtml(trader.username)} | ${roiStr} ROI | MAHORAGA" />`,
+    twitterTitle: `<meta name="twitter:title" content="${escapeHtml(trader.username)} | ${roiStr} ROI | Sakuna — Maharaga Leaderboard" />`,
     twitterDescription: `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
   };
 }

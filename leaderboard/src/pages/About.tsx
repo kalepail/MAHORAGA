@@ -1,3 +1,5 @@
+import { FULL_BRAND_NAME } from "../branding";
+
 interface AboutProps {
   navigate: (path: string) => void;
 }
@@ -5,10 +7,10 @@ interface AboutProps {
 export function About({ navigate }: AboutProps) {
   return (
     <div className="max-w-[700px] mx-auto">
-      <title>About | How the Leaderboard Works | MAHORAGA</title>
+      <title>{`About | How the Leaderboard Works | ${FULL_BRAND_NAME}`}</title>
       {/* Hero */}
       <div className="mb-8">
-        <h1 className="hud-value-xl mb-3">MAHORAGA</h1>
+        <h1 className="hud-value-xl mb-3">{FULL_BRAND_NAME}</h1>
         <p className="hud-value-md text-hud-text-dim leading-relaxed">
           An autonomous, LLM-powered trading agent that monitors social
           sentiment, analyzes signals with AI, and executes trades through

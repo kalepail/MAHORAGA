@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { FULL_BRAND_NAME } from "../branding";
 
 interface HeaderProps {
   navigate: (path: string) => void;
@@ -23,14 +24,8 @@ export function Header({ navigate, currentPage }: HeaderProps) {
           }}
           className="flex items-center gap-3"
         >
-          <span className="text-[14px] font-medium tracking-[0.1em] text-hud-text-bright">
-            MAHORAGA
-          </span>
-          <span className="text-[11px] tracking-[0.2em] text-hud-text-dim">
-            //
-          </span>
-          <span className="text-[11px] tracking-[0.15em] text-hud-text-dim uppercase">
-            Leaderboard
+          <span className="text-[12px] font-medium tracking-[0.08em] text-hud-text-bright">
+            {FULL_BRAND_NAME}
           </span>
         </a>
 

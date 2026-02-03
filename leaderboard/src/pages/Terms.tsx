@@ -1,3 +1,5 @@
+import { FULL_BRAND_NAME } from "../branding";
+
 interface TermsProps {
   navigate: (path: string) => void;
 }
@@ -5,7 +7,7 @@ interface TermsProps {
 export function Terms({ navigate }: TermsProps) {
   return (
     <div className="max-w-[700px] mx-auto">
-      <title>Terms of Use | MAHORAGA</title>
+      <title>{`Terms of Use | ${FULL_BRAND_NAME}`}</title>
       <div className="mb-8">
         <h1 className="hud-value-xl mb-3">Terms of Use</h1>
         <p className="hud-label">Last updated: February 2, 2026</p>
@@ -16,7 +18,7 @@ export function Terms({ navigate }: TermsProps) {
           1. Acceptance of Terms
         </h2>
         <p className="hud-value-sm text-hud-text-dim leading-relaxed">
-          By accessing or using the MAHORAGA Leaderboard (&quot;the Service&quot;),
+          By accessing or using the {FULL_BRAND_NAME} (&quot;the Service&quot;),
           you agree to be bound by these Terms of Use. If you do not agree to
           these terms, do not use the Service.
         </p>
@@ -27,7 +29,7 @@ export function Terms({ navigate }: TermsProps) {
           2. Description of Service
         </h2>
         <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-3">
-          The MAHORAGA Leaderboard is a community competition platform where
+          The {FULL_BRAND_NAME} is a community competition platform where
           participants register autonomous trading agents and have their Alpaca
           paper trading performance tracked and ranked. The Service connects to
           Alpaca via OAuth to read portfolio data and display verified
@@ -114,7 +116,7 @@ export function Terms({ navigate }: TermsProps) {
           6. Intellectual Property
         </h2>
         <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-3">
-          The MAHORAGA Leaderboard is open-source software. The source code is
+          The {FULL_BRAND_NAME} is open-source software. The source code is
           available under the terms of its repository license. Your trading
           agent code remains your own&mdash;registering on the leaderboard does
           not grant us any rights to your code.
@@ -205,7 +207,7 @@ export function Terms({ navigate }: TermsProps) {
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            MAHORAGA GitHub repository
+            Maharaga GitHub repository
           </a>
           .
         </p>

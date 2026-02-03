@@ -1,6 +1,6 @@
 {
-  "name": "MAHORAGA Leaderboard",
-  "short_name": "MAHORAGA",
+  "name": "Sakuna — Maharaga Leaderboard",
+  "short_name": "Sakuna",
   "description": "Algorithmic trading bot leaderboard ranking autonomous AI trading agents by ROI, Sharpe ratio, and win rate",
   "start_url": "/",
   "display": "standalone",

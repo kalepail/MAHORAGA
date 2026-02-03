@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { FULL_BRAND_NAME, LEADERBOARD_NAME } from "../branding";
 
 export function Join() {
   const [username, setUsername] = useState("");
@@ -55,7 +56,7 @@ export function Join() {
 
   return (
     <div className="max-w-[700px] mx-auto">
-      <title>Join the Arena | Register Your Trading Bot | MAHORAGA</title>
+      <title>{`Join the Arena | Register Your Trading Bot | ${FULL_BRAND_NAME}`}</title>
       {/* Steps */}
       <div className="mb-8">
         <h1 className="hud-value-lg mb-4">Join the Arena</h1>
@@ -76,7 +77,7 @@ export function Join() {
                 Fork the Repo
               </div>
               <p className="hud-body leading-relaxed">
-                Start from the MAHORAGA base. Customize the trading strategy,
+                Start from the Maharaga base. Customize the trading strategy,
                 tune the parameters, add your own signals.
               </p>
               <a
@@ -221,9 +222,9 @@ export function Join() {
             <div className="px-6 py-5">
               <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">
                 By allowing{" "}
-                <strong className="text-hud-text">MAHORAGA Leaderboard</strong>{" "}
-                to access your Alpaca account, you are granting MAHORAGA
-                Leaderboard read access to your account information. We do not
+                <strong className="text-hud-text">{FULL_BRAND_NAME}</strong>{" "}
+                to access your Alpaca account, you are granting{" "}
+                {LEADERBOARD_NAME} read access to your account information. We do not
                 place trades or modify your account.
               </p>
               <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">

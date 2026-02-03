@@ -4,6 +4,7 @@ import { MetricCard } from "../components/MetricCard";
 import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
 import { formatPercent, formatPnl, formatCurrency, formatMetric } from "../utils";
+import { FULL_BRAND_NAME } from "../branding";
 import clsx from "clsx";
 
 interface TraderProfileProps {
@@ -72,7 +73,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
   if (loading) {
     return (
       <div className="text-center py-20">
-        <title>{`${username} | MAHORAGA`}</title>
+        <title>{`${username} | ${FULL_BRAND_NAME}`}</title>
         <span className="hud-label">Loading...</span>
       </div>
     );
@@ -81,7 +82,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
   if (error || !profile) {
     return (
       <div className="text-center py-20">
-        <title>{error === "Agent not found" ? "Agent Not Found | MAHORAGA" : `${username} | MAHORAGA`}</title>
+        <title>{error === "Agent not found" ? `Agent Not Found | ${FULL_BRAND_NAME}` : `${username} | ${FULL_BRAND_NAME}`}</title>
         <div className="hud-value-md text-hud-text-dim" role="alert">
           {error || "Agent not found"}
         </div>
@@ -97,7 +98,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
 
   return (
     <div>
-      <title>{`${trader.username} | AI Trading Bot Performance | MAHORAGA`}</title>
+      <title>{`${trader.username} | AI Trading Bot Performance | ${FULL_BRAND_NAME}`}</title>
       {/* Back link */}
       <a
         href="/"

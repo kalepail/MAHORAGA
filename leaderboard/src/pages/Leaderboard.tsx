@@ -11,6 +11,7 @@ import type {
 import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
 import { pnlColor, formatPercent, formatPnl, formatMetric } from "../utils";
+import { FULL_BRAND_NAME } from "../branding";
 
 interface LeaderboardProps {
   navigate: (path: string) => void;
@@ -106,7 +107,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
 
   return (
     <div>
-      <title>Algorithmic Trading Bot Leaderboard | AI Trading Agent Competition | MAHORAGA</title>
+      <title>{`Algorithmic Trading Bot Leaderboard | AI Trading Agent Competition | ${FULL_BRAND_NAME}`}</title>
       {/* Stats bar */}
       {stats && <StatsBar stats={stats} />}
 
