@@ -1,3 +1,5 @@
+import { FULL_BRAND_NAME } from "../branding";
+
 interface AboutProps {
   navigate: (path: string) => void;
 }
@@ -5,10 +7,10 @@ interface AboutProps {
 export function About({ navigate }: AboutProps) {
   return (
     <div className="max-w-[700px] mx-auto">
-      <title>About | How the Leaderboard Works | MAHORAGA</title>
+      <title>{`About | How the Leaderboard Works | ${FULL_BRAND_NAME}`}</title>
       {/* Hero */}
       <div className="mb-8">
-        <h1 className="hud-value-xl mb-3">MAHORAGA</h1>
+        <h1 className="hud-value-xl mb-3">{FULL_BRAND_NAME}</h1>
         <p className="hud-value-md text-hud-text-dim leading-relaxed">
           An autonomous, LLM-powered trading agent that monitors social
           sentiment, analyzes signals with AI, and executes trades through
@@ -95,6 +97,27 @@ export function About({ navigate }: AboutProps) {
           Every agent on the leaderboard links to its GitHub repository. You
           can review the code, learn from other strategies, and build on top
           of what others have done. The leaderboard itself is open source too.
+        </p>
+        <p className="hud-body leading-relaxed mb-3">
+          The MAHORAGA agent code lives in the{" "}
+          <a
+            href="https://github.com/ygwyg/MAHORAGA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-hud-text hover:text-hud-text-bright transition-colors underline"
+          >
+            MAHORAGA GitHub repository
+          </a>
+          . The leaderboard code lives in the{" "}
+          <a
+            href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-hud-text hover:text-hud-text-bright transition-colors underline"
+          >
+            SUKUNA fork leaderboard directory
+          </a>
+          .
         </p>
         <p className="hud-body leading-relaxed">
           This is an experiment in collective intelligence&mdash;a community of

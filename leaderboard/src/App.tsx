@@ -6,6 +6,7 @@ import { Join } from "./pages/Join";
 import { About } from "./pages/About";
 import { Terms } from "./pages/Terms";
 import { Privacy } from "./pages/Privacy";
+import { FULL_BRAND_NAME } from "./branding";
 
 type Route =
   | { page: "leaderboard" }
@@ -59,7 +60,7 @@ export default function App() {
         {route.page === "privacy" && <Privacy navigate={navigate} />}
         {route.page === "not-found" && (
           <div className="text-center py-20">
-            <title>Page Not Found | MAHORAGA</title>
+            <title>{`Page Not Found | ${FULL_BRAND_NAME}`}</title>
             <div className="hud-value-lg text-hud-text-dim mb-2">404</div>
             <div className="hud-label mb-6">Page not found</div>
             <button onClick={() => navigate("/")} className="hud-button">
@@ -71,7 +72,7 @@ export default function App() {
       <footer className="border-t border-hud-line px-4 py-4">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between">
           <span className="hud-label">
-            MAHORAGA LEADERBOARD // AUTONOMOUS TRADING AGENTS
+            {FULL_BRAND_NAME} // AUTONOMOUS TRADING AGENTS
           </span>
           <div className="flex items-center gap-4">
             <a
