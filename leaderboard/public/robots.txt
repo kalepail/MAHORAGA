@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Core pages
+Allow: /about
+Allow: /join
+Allow: /terms
+Allow: /privacy
+
+# Trader profiles (dynamically generated with SEO meta tags)
+Allow: /trader/
+
+# Block API endpoints from indexing
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://sukuna.dev/sitemap.xml
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
