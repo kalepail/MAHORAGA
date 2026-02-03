@@ -99,7 +99,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
   if (loading) {
     return (
       <div className="text-center py-20">
-        <title>{`${username} | ${FULL_BRAND_NAME}`}</title>
+        <title>{`${username} | AI Trading Bot Performance | ${FULL_BRAND_NAME}`}</title>
         <span className="hud-label">Loading...</span>
       </div>
     );
@@ -108,7 +108,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
   if (error || !profile) {
     return (
       <div className="text-center py-20">
-        <title>{error === "Agent not found" ? `Agent Not Found | ${FULL_BRAND_NAME}` : `${username} | ${FULL_BRAND_NAME}`}</title>
+        <title>{`${username} | AI Trading Bot Performance | ${FULL_BRAND_NAME}`}</title>
         <div className="hud-value-md text-hud-text-dim" role="alert">
           {error || "Agent not found"}
         </div>
