@@ -53,7 +53,7 @@ export async function getCachedTraderProfile(
   env: Env,
   username: string
 ): Promise<string | null> {
-  return env.KV.get(`trader:${username}`, "text");
+  return env.KV.get(`trader:${username}:profile`, "text");
 }
 
 export async function setCachedTraderProfile(
@@ -61,7 +61,7 @@ export async function setCachedTraderProfile(
   username: string,
   data: unknown
 ): Promise<void> {
-  await env.KV.put(`trader:${username}`, JSON.stringify(data), {
+  await env.KV.put(`trader:${username}:profile`, JSON.stringify(data), {
     expirationTtl: TRADER_TTL,
   });
 }
@@ -140,7 +140,9 @@ export async function invalidateTraderCache(
   env: Env,
   username: string
 ): Promise<void> {
-  const list = await env.KV.list({ prefix: `trader:${username}` });
+  // All trader cache keys use the pattern trader:{username}:*
+  // The trailing colon prevents prefix collisions (e.g., "foo" won't match "foobar")
+  const list = await env.KV.list({ prefix: `trader:${username}:` });
   for (const key of list.keys) {
     await env.KV.delete(key.name);
   }
