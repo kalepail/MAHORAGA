@@ -20,10 +20,10 @@
   --color-hud-purple: #9575c0;
   --color-hud-cyan: #5a9ab8;
 
-  /* Asset class colors */
-  --color-hud-coral: #e07a6e;    /* Stocks - warm, traditional */
-  --color-hud-violet: #a78bfa;   /* Crypto - electric, digital */
-  --color-hud-teal: #4fd1c5;     /* Both - balanced hybrid */
+  /* Asset class colors (blue + pink = purple) */
+  --color-hud-asset-stocks: #38bdf8;  /* Sky blue - stable, established */
+  --color-hud-asset-crypto: #f472b6;  /* Pink - bold, digital */
+  --color-hud-asset-both: #a78bfa;    /* Purple - the blend */
 
   --color-rank-gold: #b89848;
   --color-rank-silver: #7a9ba8;
