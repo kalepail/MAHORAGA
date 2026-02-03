@@ -58,7 +58,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   const period = url.searchParams.get("period") || "30";
   const sort = url.searchParams.get("sort") || "composite_score";
   const assetClass = url.searchParams.get("asset_class") || "all";
-  const minTrades = safeParseInt(url.searchParams.get("min_trades"), 10);
+  const minTrades = safeParseInt(url.searchParams.get("min_trades"), 0);
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 50), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
@@ -98,7 +98,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   // Traders with no snapshot yet (just registered, first sync pending) are
   // included with pending_sync=1 so the UI can show a "syncing" placeholder.
   //
-  // The min_trades filter (default 10) excludes traders with fewer total
+  // The min_trades filter (default 0) excludes traders with fewer total
   // filled orders, preventing one-shot luck from appearing on the board.
   let query = `
     SELECT

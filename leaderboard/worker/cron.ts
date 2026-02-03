@@ -209,7 +209,7 @@ async function rebuildCaches(env: Env): Promise<void> {
   // Pre-cache the default leaderboard view
   const defaultData = await queryLeaderboard(env, {
     period: "30", sort: "composite_score", assetClass: "all",
-    minTrades: 10, limit: 100, offset: 0,
+    minTrades: 0, limit: 100, offset: 0,
   });
   const defaultKey = leaderboardCacheKey("30", "composite_score", "all", 10);
   await setCachedLeaderboard(env, defaultKey, defaultData);
