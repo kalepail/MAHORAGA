@@ -27,20 +27,37 @@ function generateEquityCurve(
   seed: number
 ): number[] {
   const rng = seededRandom(seed);
-  const drift = (final - initial) / days;
-  // Volatility scales with both the base equity AND the magnitude of change
-  // This ensures even big gainers show realistic day-to-day swings
-  const baseVolatility = initial * 0.015;
-  const changeVolatility = Math.abs(final - initial) / days * 0.8;
-  const volatility = baseVolatility + changeVolatility;
-  const points: number[] = [initial];
+
+  // Step 1: Generate a pure random walk (no drift bias)
+  // This creates realistic up/down patterns with drawdowns
+  const dailyVolatility = initial * 0.035; // 3.5% daily swings
+  const rawWalk: number[] = [0];
+
   for (let i = 1; i <= days; i++) {
-    const prev = points[i - 1];
-    const noise = (rng() - 0.5) * 2 * volatility;
-    points.push(Math.round((prev + drift + noise) * 100) / 100);
+    const prev = rawWalk[i - 1];
+    // Slight mean reversion to prevent extreme wandering
+    const meanReversion = -prev * 0.05;
+    const noise = (rng() - 0.5) * 2 * dailyVolatility;
+    rawWalk.push(prev + noise + meanReversion);
   }
-  // Ensure the last point matches the desired final equity
+
+  // Step 2: Scale and shift the walk to connect initial → final
+  // This preserves the shape while hitting our target endpoints
+  const rawEnd = rawWalk[rawWalk.length - 1];
+  const targetChange = final - initial;
+
+  const points = rawWalk.map((val, i) => {
+    const progress = i / days;
+    // Add linear drift to reach target, plus the random walk for texture
+    const linearComponent = initial + targetChange * progress;
+    const walkComponent = val - rawEnd * progress; // Subtract expected walk endpoint
+    return Math.round((linearComponent + walkComponent) * 100) / 100;
+  });
+
+  // Force exact endpoints
+  points[0] = initial;
   points[points.length - 1] = final;
+
   return points;
 }
 
