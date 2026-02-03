@@ -130,6 +130,15 @@ async function handleApi(
       return await handleDevSync(devSyncMatch[1], env);
     }
 
+    // Dev-only: manual cron trigger
+    if (path === "/api/dev/cron" && request.method === "POST") {
+      if (!env.ALPACA_OAUTH_REDIRECT_URI.includes("localhost")) {
+        return errorJson("Not found", 404);
+      }
+      await runCronCycle(env);
+      return json({ success: true, message: "Cron cycle complete" });
+    }
+
     return errorJson("Not found", 404);
   } catch (err) {
     console.error(`[api] ${request.method} ${path} error:`, err instanceof Error ? err.message : err);
