@@ -118,14 +118,14 @@ async function purgeDeadAccounts(env: Env): Promise<void> {
  *   Step 2: Single UPDATE FROM applies the weighted formula to every snapshot.
  */
 export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
+  // Use window function instead of self-join to find latest snapshot per trader.
+  // This is more efficient: single table scan + sort vs GROUP BY + JOIN.
   const ranges = await env.DB.prepare(`
-    WITH latest AS (
-      SELECT ps.total_pnl_pct, ps.sharpe_ratio, ps.win_rate, ps.max_drawdown_pct
-      FROM performance_snapshots ps
-      INNER JOIN (
-        SELECT trader_id, MAX(snapshot_date) as max_date
-        FROM performance_snapshots GROUP BY trader_id
-      ) l ON ps.trader_id = l.trader_id AND ps.snapshot_date = l.max_date
+    WITH ranked AS (
+      SELECT
+        total_pnl_pct, sharpe_ratio, win_rate, max_drawdown_pct,
+        ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+      FROM performance_snapshots
     )
     SELECT
       MIN(total_pnl_pct)             AS roi_min,
@@ -136,7 +136,8 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
       MAX(win_rate)                  AS wr_max,
       MIN(100.0 - max_drawdown_pct)  AS imdd_min,
       MAX(100.0 - max_drawdown_pct)  AS imdd_max
-    FROM latest
+    FROM ranked
+    WHERE rn = 1
   `).first<ScoreRangesRow>();
 
   // Validate we have at least one snapshot with ROI data
@@ -157,10 +158,13 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
   const imddMin = ranges.imdd_min ?? 100;  // 100% = 0% drawdown (safest)
   const imddMax = ranges.imdd_max ?? 100;
 
+  // Use window function to identify latest snapshots, then update only those rows.
+  // SQLite's UPDATE FROM allows us to join against the CTE to target specific rows.
   await env.DB.prepare(`
-    WITH latest AS (
-      SELECT trader_id, MAX(snapshot_date) AS max_date
-      FROM performance_snapshots GROUP BY trader_id
+    WITH ranked AS (
+      SELECT trader_id, snapshot_date,
+        ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+      FROM performance_snapshots
     )
     UPDATE performance_snapshots
     SET composite_score = ROUND((
@@ -181,9 +185,10 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
            ELSE MAX(0.0, MIN(1.0, ((100.0 - max_drawdown_pct) - ?7) / (?8 - ?7)))
       END * CASE WHEN sharpe_ratio IS NULL OR win_rate IS NULL THEN 0.273 ELSE 0.15 END
     ) * 100.0, 1)
-    FROM latest
-    WHERE performance_snapshots.trader_id = latest.trader_id
-      AND performance_snapshots.snapshot_date = latest.max_date
+    FROM ranked
+    WHERE performance_snapshots.trader_id = ranked.trader_id
+      AND performance_snapshots.snapshot_date = ranked.snapshot_date
+      AND ranked.rn = 1
   `).bind(roiMin, roiMax, shMin, shMax, wrMin, wrMax, imddMin, imddMax).run();
 }
 
@@ -199,14 +204,15 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
  * Total: 1 D1 call regardless of trader count.
  */
 async function assignSyncTiers(env: Env): Promise<void> {
+  // Use window function to get latest composite_score per trader in a single scan.
   const result = await env.DB.prepare(`
-    WITH latest_scores AS (
-      SELECT ps.trader_id, ps.composite_score
-      FROM performance_snapshots ps
-      INNER JOIN (
-        SELECT trader_id, MAX(snapshot_date) AS max_date
-        FROM performance_snapshots GROUP BY trader_id
-      ) l ON ps.trader_id = l.trader_id AND ps.snapshot_date = l.max_date
+    WITH snapshot_ranked AS (
+      SELECT trader_id, composite_score,
+        ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+      FROM performance_snapshots
+    ),
+    latest_scores AS (
+      SELECT trader_id, composite_score FROM snapshot_ranked WHERE rn = 1
     ),
     ranked AS (
       SELECT t.id, t.last_trade_at,

@@ -118,22 +118,29 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   const dateBoundary = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000)
     .toISOString().split("T")[0];
 
+  // Use a CTE with window function instead of correlated subquery.
+  // This computes latest snapshot per trader in a single table scan + sort,
+  // rather than running a subquery per trader row (O(N) -> O(1)).
   let query = `
+    WITH latest_snapshots AS (
+      SELECT
+        trader_id, equity, total_pnl, total_pnl_pct, total_deposits,
+        sharpe_ratio, win_rate, max_drawdown_pct, num_trades,
+        composite_score, open_positions, snapshot_date,
+        ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+      FROM performance_snapshots
+      WHERE snapshot_date >= ?1
+    )
     SELECT
       t.id, t.username, t.github_repo, t.asset_class,
       t.joined_at,
-      ps.equity, ps.total_pnl, ps.total_pnl_pct, ps.total_deposits,
-      ps.sharpe_ratio, ps.win_rate, ps.max_drawdown_pct,
-      ps.num_trades, ps.composite_score, ps.open_positions, ps.snapshot_date,
-      CASE WHEN ps.trader_id IS NULL THEN 1 ELSE 0 END as pending_sync
+      ls.equity, ls.total_pnl, ls.total_pnl_pct, ls.total_deposits,
+      ls.sharpe_ratio, ls.win_rate, ls.max_drawdown_pct,
+      ls.num_trades, ls.composite_score, ls.open_positions, ls.snapshot_date,
+      CASE WHEN ls.trader_id IS NULL THEN 1 ELSE 0 END as pending_sync
     FROM traders t
-    LEFT JOIN performance_snapshots ps ON ps.trader_id = t.id
-      AND ps.snapshot_date = (
-        SELECT MAX(snapshot_date) FROM performance_snapshots
-        WHERE trader_id = t.id
-          AND snapshot_date >= ?1
-      )
-    WHERE t.is_active = 1 AND (ps.trader_id IS NULL OR COALESCE(ps.num_trades, 0) >= ?2)
+    LEFT JOIN latest_snapshots ls ON ls.trader_id = t.id AND ls.rn = 1
+    WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?2)
   `;
 
   const params: (string | number)[] = [dateBoundary, minTrades];
@@ -148,11 +155,11 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   // This ensures traders with no composite score yet are ranked by their ROI.
   // Secondary sort by total_pnl_pct ensures sensible ordering when primary sort values are equal.
   const primaryExpr = sortCol === "max_drawdown_pct"
-    ? `COALESCE(ps.${sortCol}, 999)`  // ASC: NULL = worst (high drawdown)
-    : `COALESCE(ps.${sortCol}, -999999)`;  // DESC: NULL = worst (negative)
+    ? `COALESCE(ls.${sortCol}, 999)`  // ASC: NULL = worst (high drawdown)
+    : `COALESCE(ls.${sortCol}, -999999)`;  // DESC: NULL = worst (negative)
   const secondarySort = sortCol === "total_pnl_pct"
-    ? "COALESCE(ps.num_trades, 0) DESC"
-    : "COALESCE(ps.total_pnl_pct, -999999) DESC";
+    ? "COALESCE(ls.num_trades, 0) DESC"
+    : "COALESCE(ls.total_pnl_pct, -999999) DESC";
   query += ` ORDER BY ${primaryExpr} ${sortDir}, ${secondarySort}`;
   query += ` LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`;
   params.push(limit, offset);
@@ -203,20 +210,22 @@ export async function queryStats(env: Env) {
   // 200 orders per trader (syncer deletes and reinserts on each sync).
   // The num_trades column in snapshots comes from fetchTotalFilledOrderCount()
   // which paginates through ALL closed orders for the true lifetime count.
+  // Use window function instead of self-join for latest snapshot per trader.
   const [statsResult, pnlAndTradesResult] = await env.DB.batch([
     env.DB.prepare(`
       SELECT COUNT(*) as total_traders
       FROM traders WHERE is_active = 1
     `),
     env.DB.prepare(`
+      WITH ranked AS (
+        SELECT total_pnl, num_trades,
+          ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+        FROM performance_snapshots
+      )
       SELECT
-        COALESCE(SUM(ps.total_pnl), 0) as total_pnl,
-        COALESCE(SUM(ps.num_trades), 0) as total_trades
-      FROM performance_snapshots ps
-      INNER JOIN (
-        SELECT trader_id, MAX(snapshot_date) as d
-        FROM performance_snapshots GROUP BY trader_id
-      ) latest ON ps.trader_id = latest.trader_id AND ps.snapshot_date = latest.d
+        COALESCE(SUM(total_pnl), 0) as total_pnl,
+        COALESCE(SUM(num_trades), 0) as total_trades
+      FROM ranked WHERE rn = 1
     `),
   ]);
 
