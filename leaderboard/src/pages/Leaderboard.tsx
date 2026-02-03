@@ -452,14 +452,14 @@ function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
             {trader.username}
           </span>
           {syncing ? (
-            <span className="text-[9px] font-mono uppercase tracking-[0.1em] px-1.5 py-0.5 border border-hud-text-dim/30 text-hud-text-dim">
+            <span className="text-[9px] font-mono uppercase tracking-[0.1em] px-1.5 py-0.5 border border-hud-warning/50 text-hud-warning">
               Syncing
             </span>
           ) : (
             <>
               <AssetBadge assetClass={trader.asset_class} />
               {isNew && (
-                <span className="text-[9px] font-mono uppercase tracking-[0.1em] px-1.5 py-0.5 border border-hud-cyan/50 text-hud-cyan">
+                <span className="text-[9px] font-mono uppercase tracking-[0.1em] px-1.5 py-0.5 border border-hud-success/50 text-hud-success">
                   New
                 </span>
               )}
