@@ -87,15 +87,7 @@ export function Join() {
                   rel="noopener noreferrer"
                   className="hud-button inline-block text-[10px]"
                 >
-                  MAHORAGA GitHub repository (agent code)
-                </a>
-                <a
-                  href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hud-button inline-block text-[10px]"
-                >
-                  Leaderboard code (SUKUNA fork)
+                  Fork on GitHub
                 </a>
               </div>
             </div>

@@ -95,6 +95,14 @@ export default function App() {
             >
               Privacy
             </a>
+            <a
+              href="https://github.com/kalepail/MAHORAGA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hud-label hover:text-hud-text transition-colors"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </footer>
