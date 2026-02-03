@@ -2,10 +2,16 @@
  * KV caching layer for leaderboard reads.
  *
  * Strategy:
- * - Leaderboard views cached for 15 min (rebuilt by cron every 15 min)
- * - Trader profiles cached for 5 min (invalidated by queue consumer after sync)
- * - Stats cached for 15 min (rebuilt by cron)
- * - Custom filter/sort combinations fall through to D1
+ * - Leaderboard first page cached for 15 min (read-through + cron pre-warms default view)
+ * - Stats cached for 15 min (read-through + cron pre-warms)
+ * - Trader profiles/trades/equity cached for 5 min (read-through, invalidated after sync)
+ *
+ * Cache key patterns:
+ * - leaderboard:{period}:{sort}:{assetClass}:{minTrades}
+ * - leaderboard:stats
+ * - trader:{username}:profile
+ * - trader:{username}:trades:{limit}:{offset}
+ * - trader:{username}:equity:{days}
  */
 
 const LEADERBOARD_TTL = 900;   // 15 minutes
