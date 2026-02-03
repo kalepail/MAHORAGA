@@ -1,4 +1,4 @@
-- review logging and error reporting and ensure it's good across both stacks
+- Review logging and error reporting and ensure it's good across both stacks
 - Codex, Kimi and Claude deep research, audit and improvements after documents and cross references
 - Add a Me link where you can easily find yourself in the list
 - Add a "Find Me" in the leaderboard which will load you in context with appropriate pagination positioning. May require we add pagination functionality for the leaderboard if we haven't already. should only be showing the top 100 by default but if you are say 845 it should paginate to that position and show you in that context
