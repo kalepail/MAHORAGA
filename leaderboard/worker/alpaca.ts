@@ -249,15 +249,28 @@ export async function fetchClosedOrders(
     }));
 }
 
+/** Result of a full trade count operation. */
+export interface FullTradeCountResult {
+  count: number;
+  /** created_at of the newest order, used for subsequent incremental counts. */
+  newestOrderCreatedAt: string | null;
+}
+
 /**
- * Fetch total number of closed (filled) orders. Paginates to count all.
- * We use the orders endpoint with limit=500 and page through using `until`.
+ * Fetch total number of closed (filled) orders. Paginates through ALL orders.
+ *
+ * Returns both the count and the newest order's created_at timestamp,
+ * which can be used for subsequent incremental counting.
+ *
+ * WARNING: This can make many API calls for accounts with thousands of trades.
+ * Use fetchFilledOrderCountSince() for incremental counting when possible.
  */
 export async function fetchTotalFilledOrderCount(
   token: string
-): Promise<number> {
+): Promise<FullTradeCountResult> {
   let total = 0;
   let until: string | null = null;
+  let newestOrderCreatedAt: string | null = null;
 
   for (;;) {
     const params = new URLSearchParams({
@@ -278,6 +291,11 @@ export async function fetchTotalFilledOrderCount(
     const orders = (await res.json()) as Record<string, unknown>[];
     if (orders.length === 0) break;
 
+    // On first page, capture the newest order's created_at
+    if (newestOrderCreatedAt === null && orders.length > 0) {
+      newestOrderCreatedAt = orders[0].created_at as string;
+    }
+
     const filled = orders.filter((o) => o.status === "filled");
     total += filled.length;
 
@@ -287,7 +305,80 @@ export async function fetchTotalFilledOrderCount(
     until = orders[orders.length - 1].created_at as string;
   }
 
-  return total;
+  return { count: total, newestOrderCreatedAt };
+}
+
+/** Result of an incremental trade count operation. */
+export interface IncrementalTradeCountResult {
+  /** Number of new filled orders since the 'after' timestamp. */
+  newCount: number;
+  /** created_at of the newest order in this batch (for next incremental count). */
+  newestOrderCreatedAt: string | null;
+  /** True if we hit the page limit and may have missed orders. Caller should do full recount. */
+  hitPageLimit: boolean;
+}
+
+/**
+ * Fetch count of filled orders created AFTER a given timestamp.
+ *
+ * Used for incremental trade counting: instead of paginating through ALL orders
+ * every sync, we only count new orders since the last sync.
+ *
+ * @param token - Alpaca access token
+ * @param after - ISO 8601 timestamp. Only orders created AFTER this (exclusive) are counted.
+ * @param maxPages - Safety limit on pagination (default 10 = 5000 orders max)
+ * @returns Count of new filled orders, newest timestamp, and whether page limit was hit
+ */
+export async function fetchFilledOrderCountSince(
+  token: string,
+  after: string,
+  maxPages = 10
+): Promise<IncrementalTradeCountResult> {
+  let newCount = 0;
+  let newestOrderCreatedAt: string | null = null;
+  let until: string | null = null;
+  let pageCount = 0;
+
+  for (; pageCount < maxPages; pageCount++) {
+    const params = new URLSearchParams({
+      status: "closed",
+      limit: "500",
+      direction: "desc",
+      after, // Only orders created AFTER this timestamp (exclusive)
+    });
+    // For subsequent pages, also add 'until' to narrow the window
+    if (until) params.set("until", until);
+
+    const res = await fetch(`${BASE}/v2/orders?${params}`, {
+      headers: headers(token),
+    });
+    if (!res.ok) {
+      console.error(`[alpaca] fetchFilledOrderCountSince: orders endpoint returned ${res.status} mid-pagination (counted ${newCount} so far)`);
+      break;
+    }
+
+    const orders = (await res.json()) as Record<string, unknown>[];
+    if (orders.length === 0) break;
+
+    // On first page, capture the newest order's created_at
+    if (newestOrderCreatedAt === null && orders.length > 0) {
+      newestOrderCreatedAt = orders[0].created_at as string;
+    }
+
+    const filled = orders.filter((o) => o.status === "filled");
+    newCount += filled.length;
+
+    if (orders.length < 500) break;
+
+    // Use oldest order's created_at for next page
+    until = orders[orders.length - 1].created_at as string;
+  }
+
+  return {
+    newCount,
+    newestOrderCreatedAt,
+    hitPageLimit: pageCount >= maxPages,
+  };
 }
 
 // ---------------------------------------------------------------------------

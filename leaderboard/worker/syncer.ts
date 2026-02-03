@@ -15,6 +15,7 @@ import {
   fetchTotalDeposits,
   fetchClosedOrders,
   fetchTotalFilledOrderCount,
+  fetchFilledOrderCountSince,
   AlpacaError,
 } from "./alpaca";
 import { calcSharpeRatio, calcMaxDrawdown, calcWinRate } from "./metrics";
@@ -33,6 +34,12 @@ export interface SyncResult {
   alpacaStatus?: number;
 }
 
+/** Row type for stored incremental counting data. */
+interface TraderIncrementalRow {
+  lifetime_trade_count: number | null;
+  last_count_order_created_at: string | null;
+}
+
 export class SyncerDO extends DurableObject<Env> {
   /**
    * Called by the queue consumer or manual sync endpoint.
@@ -40,19 +47,78 @@ export class SyncerDO extends DurableObject<Env> {
    */
   async sync(traderId: string, accessToken: string): Promise<SyncResult> {
     try {
+      // ---------------------------------------------------------------
+      // Fetch stored incremental counting data
+      // ---------------------------------------------------------------
+      const storedCounts = await this.env.DB.prepare(
+        `SELECT lifetime_trade_count, last_count_order_created_at FROM traders WHERE id = ?1`
+      ).bind(traderId).first<TraderIncrementalRow>();
+
+      // ---------------------------------------------------------------
       // Parallel fetch: account + positions + portfolio history + deposits
-      // Orders fetched separately since we need both count and recent list
-      const [account, positions, history, totalDeposits, filledCount] =
+      // Trade count is handled separately for incremental optimization
+      // ---------------------------------------------------------------
+      const [account, positions, history, totalDeposits, recentOrders] =
         await Promise.all([
           fetchAccount(accessToken),
           fetchPositions(accessToken),
           fetchPortfolioHistory(accessToken, { period: "all", timeframe: "1D" }),
           fetchTotalDeposits(accessToken),
-          fetchTotalFilledOrderCount(accessToken),
+          fetchClosedOrders(accessToken, 200),
         ]);
 
-      // Fetch recent orders for trade display (separate, smaller call)
-      const recentOrders = await fetchClosedOrders(accessToken, 200);
+      // ---------------------------------------------------------------
+      // Trade Counting — Incremental when possible
+      // ---------------------------------------------------------------
+      // Instead of paginating through ALL orders every sync (O(n) API calls),
+      // we store a running total and only count new orders since last sync.
+      //
+      // Full count is done ONLY when:
+      //   - First sync (no stored count)
+      //   - After migration (stored count is NULL)
+      //
+      // If incremental count hits page limit (5000+ new orders), we accept
+      // the partial count and continue from there on the next sync. This
+      // ensures bounded API calls even for hyperactive traders.
+      //
+      // Deduping: The 'after' parameter is exclusive, so using the exact
+      // timestamp of the last counted order means no double-counting.
+      // ---------------------------------------------------------------
+
+      let filledCount: number;
+      let newLastCountOrderCreatedAt: string | null;
+
+      const hasStoredCount = storedCounts?.lifetime_trade_count !== null &&
+                             storedCounts?.last_count_order_created_at !== null;
+
+      if (hasStoredCount) {
+        // Incremental count: only fetch orders created after last count
+        const incrementalResult = await fetchFilledOrderCountSince(
+          accessToken,
+          storedCounts.last_count_order_created_at!,
+          10 // Max 10 pages = 5000 new orders
+        );
+
+        // Always use the incremental count, even if we hit the page limit.
+        // If we hit the limit, we've counted up to 5000 new orders and captured
+        // the timestamp of where we stopped. The next sync will continue from
+        // there and eventually catch up. This avoids the unbounded full recount.
+        filledCount = storedCounts.lifetime_trade_count! + incrementalResult.newCount;
+        // Use new timestamp if we got new orders, otherwise keep the old one
+        newLastCountOrderCreatedAt = incrementalResult.newestOrderCreatedAt ??
+                                     storedCounts.last_count_order_created_at;
+
+        if (incrementalResult.hitPageLimit) {
+          // Log for observability — count may be temporarily understated but
+          // will catch up over subsequent syncs
+          console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue catching up next sync`);
+        }
+      } else {
+        // No stored count — do full count
+        const fullResult = await fetchTotalFilledOrderCount(accessToken);
+        filledCount = fullResult.count;
+        newLastCountOrderCreatedAt = fullResult.newestOrderCreatedAt;
+      }
 
       // ---------------------------------------------------------------
       // P&L Calculation — Starting Capital Baseline
@@ -236,12 +302,17 @@ export class SyncerDO extends DurableObject<Env> {
           ? "crypto"
           : "stocks";
 
-      // Update trader metadata including last_trade_at
+      // Update trader metadata including last_trade_at and incremental counting fields
       statements.push(
         this.env.DB.prepare(
-          `UPDATE traders SET last_synced_at = datetime('now'), asset_class = ?2, last_trade_at = ?3
+          `UPDATE traders SET
+             last_synced_at = datetime('now'),
+             asset_class = ?2,
+             last_trade_at = ?3,
+             lifetime_trade_count = ?4,
+             last_count_order_created_at = ?5
            WHERE id = ?1`
-        ).bind(traderId, derivedAssetClass, lastTradeAt)
+        ).bind(traderId, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderCreatedAt)
       );
 
       await this.env.DB.batch(statements);

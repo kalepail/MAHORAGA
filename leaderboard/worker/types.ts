@@ -21,6 +21,9 @@ export interface TraderDbRow {
   last_trade_at: string | null;
   first_failure_at: string | null;    // when failure streak started (7-day grace period)
   last_failure_reason: string | null; // debug info for why sync is failing
+  // Incremental trade counting (to avoid paginating ALL orders every sync)
+  lifetime_trade_count: number | null;         // running total of filled orders
+  last_count_order_created_at: string | null;  // created_at of newest counted order
 }
 
 export interface OAuthTokenDbRow {
