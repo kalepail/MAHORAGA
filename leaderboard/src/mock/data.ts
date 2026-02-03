@@ -69,7 +69,7 @@ interface AgentSeed {
   max_drawdown_pct: number;
   num_trades: number;
   num_winning_trades: number;
-  composite_score: number;
+  composite_score: number | null;
   open_positions: number;
   unrealized_pnl: number;
   realized_pnl: number;
@@ -78,11 +78,11 @@ interface AgentSeed {
   joined_days_ago: number;
   seed: number;
   symbols: string[];
-  /** Simulates a trader whose first sync is still in progress */
-  _pendingSync?: boolean;
-  /** Simulates a trader with insufficient data for composite score */
-  _nullScore?: boolean;
 }
+
+// Trader with pending sync state for testing UI edge case (first sync in progress)
+const PENDING_SYNC_TRADER = "fresh_start";
+// Note: "new_trader" has composite_score: null to test the "has data but unranked" state
 
 const AGENTS: AgentSeed[] = [
   {
@@ -99,7 +99,7 @@ const AGENTS: AgentSeed[] = [
     max_drawdown_pct: 0,
     num_trades: 0,
     num_winning_trades: 0,
-    composite_score: 0, // Will be set to null in output
+    composite_score: null,
     open_positions: 0,
     unrealized_pnl: 0,
     realized_pnl: 0,
@@ -108,7 +108,6 @@ const AGENTS: AgentSeed[] = [
     joined_days_ago: 1,
     seed: 9009,
     symbols: ["AAPL", "MSFT"],
-    _pendingSync: true,
   },
   {
     username: "new_trader",
@@ -124,7 +123,7 @@ const AGENTS: AgentSeed[] = [
     max_drawdown_pct: 2.1,
     num_trades: 12,
     num_winning_trades: 7,
-    composite_score: 0, // Will be set to null in output (not enough data yet)
+    composite_score: null,
     open_positions: 1,
     unrealized_pnl: 200,
     realized_pnl: 1300,
@@ -133,7 +132,6 @@ const AGENTS: AgentSeed[] = [
     joined_days_ago: 3,
     seed: 9010,
     symbols: ["BTC/USD", "ETH/USD"],
-    _nullScore: true,
   },
   {
     username: "signal_alpha",
@@ -430,58 +428,64 @@ function buildSparkline(agent: AgentSeed): number[] {
 const snapshotDate = buildSnapshotDate();
 const lastSyncedAt = buildLastSyncedAt();
 
-export const mockTraders: TraderRow[] = AGENTS.map((a) => ({
-  username: a.username,
-  github_repo: a.github_repo,
-  asset_class: a.asset_class,
-  joined_at: buildJoinedAt(a.joined_days_ago),
-  equity: a._pendingSync ? null : a.equity,
-  total_pnl: a._pendingSync ? null : a.total_pnl,
-  total_pnl_pct: a._pendingSync ? null : a.total_pnl_pct,
-  total_deposits: a._pendingSync ? null : a.total_deposits,
-  sharpe_ratio: a._pendingSync ? null : a.sharpe_ratio,
-  win_rate: a._pendingSync ? null : a.win_rate,
-  max_drawdown_pct: a._pendingSync ? null : a.max_drawdown_pct,
-  num_trades: a._pendingSync ? null : a.num_trades,
-  composite_score: (a._pendingSync || a._nullScore) ? null : a.composite_score,
-  open_positions: a._pendingSync ? null : a.open_positions,
-  snapshot_date: a._pendingSync ? null : snapshotDate,
-  sparkline: a._pendingSync ? [] : buildSparkline(a),
-  pending_sync: a._pendingSync ? 1 : undefined,
-}));
+export const mockTraders: TraderRow[] = AGENTS.map((a) => {
+  const isPendingSync = a.username === PENDING_SYNC_TRADER;
+  return {
+    username: a.username,
+    github_repo: a.github_repo,
+    asset_class: a.asset_class,
+    joined_at: buildJoinedAt(a.joined_days_ago),
+    equity: isPendingSync ? null : a.equity,
+    total_pnl: isPendingSync ? null : a.total_pnl,
+    total_pnl_pct: isPendingSync ? null : a.total_pnl_pct,
+    total_deposits: isPendingSync ? null : a.total_deposits,
+    sharpe_ratio: isPendingSync ? null : a.sharpe_ratio,
+    win_rate: isPendingSync ? null : a.win_rate,
+    max_drawdown_pct: isPendingSync ? null : a.max_drawdown_pct,
+    num_trades: isPendingSync ? null : a.num_trades,
+    composite_score: isPendingSync ? null : a.composite_score,
+    open_positions: isPendingSync ? null : a.open_positions,
+    snapshot_date: isPendingSync ? null : snapshotDate,
+    sparkline: isPendingSync ? [] : buildSparkline(a),
+    pending_sync: isPendingSync ? 1 : undefined,
+  };
+});
 
 export const mockProfiles: Record<string, TraderProfile> = Object.fromEntries(
-  AGENTS.map((a) => [
-    a.username,
-    {
-      trader: {
-        id: `mock-${a.username}`,
-        username: a.username,
-        github_repo: a.github_repo,
-        asset_class: a.asset_class,
-        joined_at: buildJoinedAt(a.joined_days_ago),
-        last_synced_at: a._pendingSync ? null : lastSyncedAt,
+  AGENTS.map((a) => {
+    const isPendingSync = a.username === PENDING_SYNC_TRADER;
+    return [
+      a.username,
+      {
+        trader: {
+          id: `mock-${a.username}`,
+          username: a.username,
+          github_repo: a.github_repo,
+          asset_class: a.asset_class,
+          joined_at: buildJoinedAt(a.joined_days_ago),
+          last_synced_at: isPendingSync ? null : lastSyncedAt,
+        },
+        snapshot: isPendingSync ? null : {
+          equity: a.equity,
+          cash: a.cash,
+          total_deposits: a.total_deposits,
+          total_pnl: a.total_pnl,
+          total_pnl_pct: a.total_pnl_pct,
+          unrealized_pnl: a.unrealized_pnl,
+          realized_pnl: a.realized_pnl,
+          day_pnl: a.day_pnl,
+          num_trades: a.num_trades,
+          num_winning_trades: a.num_winning_trades,
+          win_rate: a.win_rate,
+          max_drawdown_pct: a.max_drawdown_pct,
+          sharpe_ratio: a.sharpe_ratio,
+          open_positions: a.open_positions,
+          composite_score: a.composite_score,
+          snapshot_date: snapshotDate,
+        },
       },
-      snapshot: a._pendingSync ? null : {
-        equity: a.equity,
-        cash: a.cash,
-        total_deposits: a.total_deposits,
-        total_pnl: a.total_pnl,
-        total_pnl_pct: a.total_pnl_pct,
-        unrealized_pnl: a.unrealized_pnl,
-        realized_pnl: a.realized_pnl,
-        day_pnl: a.day_pnl,
-        num_trades: a.num_trades,
-        num_winning_trades: a.num_winning_trades,
-        win_rate: a.win_rate,
-        max_drawdown_pct: a.max_drawdown_pct,
-        sharpe_ratio: a.sharpe_ratio,
-        open_positions: a.open_positions,
-        composite_score: a._nullScore ? null : a.composite_score,
-        snapshot_date: snapshotDate,
-      },
-    },
-  ])
+    ];
+  })
 );
 
 export const mockTrades: Record<string, Trade[]> = Object.fromEntries(
