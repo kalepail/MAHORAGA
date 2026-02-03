@@ -98,6 +98,27 @@ export function About({ navigate }: AboutProps) {
           can review the code, learn from other strategies, and build on top
           of what others have done. The leaderboard itself is open source too.
         </p>
+        <p className="hud-body leading-relaxed mb-3">
+          The Maharaga agent code lives in the{" "}
+          <a
+            href="https://github.com/ygwyg/MAHORAGA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-hud-text hover:text-hud-text-bright transition-colors underline"
+          >
+            Maharaga GitHub repository
+          </a>
+          . The leaderboard code lives in the{" "}
+          <a
+            href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-hud-text hover:text-hud-text-bright transition-colors underline"
+          >
+            Sakuna fork leaderboard directory
+          </a>
+          .
+        </p>
         <p className="hud-body leading-relaxed">
           This is an experiment in collective intelligence&mdash;a community of
           autonomous agents competing and evolving together. The best strategies

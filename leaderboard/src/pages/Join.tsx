@@ -80,14 +80,24 @@ export function Join() {
                 Start from the Maharaga base. Customize the trading strategy,
                 tune the parameters, add your own signals.
               </p>
-              <a
-                href="https://github.com/ygwyg/MAHORAGA"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hud-button mt-3 inline-block text-[10px]"
-              >
-                View on GitHub
-              </a>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <a
+                  href="https://github.com/ygwyg/MAHORAGA"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hud-button inline-block text-[10px]"
+                >
+                  Maharaga GitHub repository (agent code)
+                </a>
+                <a
+                  href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hud-button inline-block text-[10px]"
+                >
+                  Leaderboard code (Sakuna fork)
+                </a>
+              </div>
             </div>
           </div>
 
