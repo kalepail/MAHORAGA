@@ -12,7 +12,9 @@
 import { encryptToken } from "./crypto";
 import {
   getCachedLeaderboard,
+  setCachedLeaderboard,
   getCachedStats,
+  setCachedStats,
   getCachedTraderProfile,
   setCachedTraderProfile,
   getCachedTraderTrades,
@@ -73,18 +75,29 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 100), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
-  // Check KV cache (only for default pagination)
+  // Check KV cache (only for first page requests)
   const cacheKey = leaderboardCacheKey(period, sort, assetClass, minTrades);
-  const cached = await getCachedLeaderboard(env, cacheKey);
-  if (cached && offset === 0 && limit === 100) {
-    return new Response(cached, {
-      headers: { "Content-Type": "application/json" },
-    });
+  const isFirstPage = offset === 0 && limit === 100;
+
+  if (isFirstPage) {
+    const cached = await getCachedLeaderboard(env, cacheKey);
+    if (cached) {
+      return new Response(cached, {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   const data = await queryLeaderboard(env, {
     period, sort, assetClass, minTrades, limit, offset,
   });
+
+  // Write-through cache for first page requests
+  if (isFirstPage) {
+    try { await setCachedLeaderboard(env, cacheKey, data); }
+    catch (err) { console.error("[api] Cache write failed for leaderboard:", err instanceof Error ? err.message : err); }
+  }
+
   return json(data);
 }
 
@@ -201,6 +214,11 @@ export async function getLeaderboardStats(env: Env): Promise<Response> {
   }
 
   const stats = await queryStats(env);
+
+  // Write-through cache
+  try { await setCachedStats(env, stats); }
+  catch (err) { console.error("[api] Cache write failed for stats:", err instanceof Error ? err.message : err); }
+
   return json(stats);
 }
 

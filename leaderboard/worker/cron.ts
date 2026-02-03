@@ -308,7 +308,7 @@ async function rebuildCaches(env: Env): Promise<void> {
     period: "30", sort: "composite_score", assetClass: "all",
     minTrades: 0, limit: 100, offset: 0,
   });
-  const defaultKey = leaderboardCacheKey("30", "composite_score", "all", 10);
+  const defaultKey = leaderboardCacheKey("30", "composite_score", "all", 0);
   await setCachedLeaderboard(env, defaultKey, defaultData);
 
   // Pre-cache stats
