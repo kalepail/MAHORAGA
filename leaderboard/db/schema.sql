@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS equity_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_equity_trader ON equity_history(trader_id, timestamp DESC);
+-- Unique constraint: one data point per trader per day (added in migration 0001)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_equity_unique_trader_timestamp ON equity_history(trader_id, timestamp);
 
 -- Individual trades (from Alpaca FILL activities)
 CREATE TABLE IF NOT EXISTS trades (

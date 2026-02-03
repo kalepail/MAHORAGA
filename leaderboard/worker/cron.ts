@@ -29,6 +29,10 @@ export async function runCronCycle(env: Env): Promise<void> {
   try { await computeAndStoreCompositeScores(env); }
   catch (err) { console.error("[cron] computeAndStoreCompositeScores failed:", err instanceof Error ? err.message : err); }
 
+  // Prune old snapshots AFTER scores are computed (so we don't delete unscored snapshots)
+  try { await pruneOldSnapshots(env); }
+  catch (err) { console.error("[cron] pruneOldSnapshots failed:", err instanceof Error ? err.message : err); }
+
   try { await assignSyncTiers(env); }
   catch (err) { console.error("[cron] assignSyncTiers failed:", err instanceof Error ? err.message : err); }
 
@@ -80,6 +84,38 @@ async function purgeDeadAccounts(env: Env): Promise<void> {
   `).run();
 
   console.log(`[cron] Purged ${result.meta.changes} dead accounts`);
+}
+
+/**
+ * Prune old performance_snapshots, keeping only the latest per trader.
+ *
+ * Historical snapshots are never queried - all leaderboard, profile, and scoring
+ * queries use ROW_NUMBER() to get the latest snapshot per trader. Keeping old
+ * snapshots wastes storage without providing value.
+ *
+ * This runs AFTER composite scores are computed, ensuring the latest snapshot
+ * has its score calculated before we delete older ones.
+ */
+async function pruneOldSnapshots(env: Env): Promise<void> {
+  // Delete all snapshots except the most recent per trader.
+  // Uses a CTE with ROW_NUMBER to identify the latest snapshot per trader,
+  // then deletes everything else.
+  const result = await env.DB.prepare(`
+    WITH latest AS (
+      SELECT id
+      FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
+        FROM performance_snapshots
+      )
+      WHERE rn = 1
+    )
+    DELETE FROM performance_snapshots
+    WHERE id NOT IN (SELECT id FROM latest)
+  `).run();
+
+  if (result.meta.changes > 0) {
+    console.log(`[cron] Pruned ${result.meta.changes} old snapshots`);
+  }
 }
 
 /**

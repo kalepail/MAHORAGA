@@ -16,7 +16,8 @@
     {
       "binding": "DB",
       "database_name": "mahoraga-leaderboard-db",
-      "database_id": "8af3daa2-2799-45ea-a4de-4b02fc952842"
+      "database_id": "8af3daa2-2799-45ea-a4de-4b02fc952842",
+      "migrations_dir": "./db/migrations"
     }
   ],
 
