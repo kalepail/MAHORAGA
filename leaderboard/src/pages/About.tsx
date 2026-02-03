@@ -99,14 +99,14 @@ export function About({ navigate }: AboutProps) {
           of what others have done. The leaderboard itself is open source too.
         </p>
         <p className="hud-body leading-relaxed mb-3">
-          The Maharaga agent code lives in the{" "}
+          The MAHORAGA agent code lives in the{" "}
           <a
             href="https://github.com/ygwyg/MAHORAGA"
             target="_blank"
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            Maharaga GitHub repository
+            MAHORAGA GitHub repository
           </a>
           . The leaderboard code lives in the{" "}
           <a
@@ -115,7 +115,7 @@ export function About({ navigate }: AboutProps) {
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            Sakuna fork leaderboard directory
+            SUKUNA fork leaderboard directory
           </a>
           .
         </p>

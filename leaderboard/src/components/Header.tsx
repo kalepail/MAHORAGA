@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { FULL_BRAND_NAME } from "../branding";
+import { FULL_BRAND_NAME, PRODUCT_NAME } from "../branding";
 
 interface HeaderProps {
   navigate: (path: string) => void;
@@ -13,6 +13,8 @@ const links = [
 ];
 
 export function Header({ navigate, currentPage }: HeaderProps) {
+  const headerBrand = FULL_BRAND_NAME.toUpperCase();
+
   return (
     <header className="border-b border-hud-line px-4">
       <div className="max-w-[1400px] mx-auto flex items-center justify-between h-[48px]">
@@ -24,8 +26,14 @@ export function Header({ navigate, currentPage }: HeaderProps) {
           }}
           className="flex items-center gap-3"
         >
-          <span className="text-[12px] font-medium tracking-[0.08em] text-hud-text-bright">
-            {FULL_BRAND_NAME}
+          <span className="text-[14px] font-medium tracking-[0.1em] text-hud-text-bright">
+            {PRODUCT_NAME}
+          </span>
+          <span className="text-[11px] tracking-[0.2em] text-hud-text-dim">
+            //
+          </span>
+          <span className="text-[11px] tracking-[0.15em] text-hud-text-dim uppercase">
+            {headerBrand.replace(`${PRODUCT_NAME} - `, "")}
           </span>
         </a>
 

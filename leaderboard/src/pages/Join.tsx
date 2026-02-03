@@ -77,7 +77,7 @@ export function Join() {
                 Fork the Repo
               </div>
               <p className="hud-body leading-relaxed">
-                Start from the Maharaga base. Customize the trading strategy,
+                Start from the MAHORAGA base. Customize the trading strategy,
                 tune the parameters, add your own signals.
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -87,7 +87,7 @@ export function Join() {
                   rel="noopener noreferrer"
                   className="hud-button inline-block text-[10px]"
                 >
-                  Maharaga GitHub repository (agent code)
+                  MAHORAGA GitHub repository (agent code)
                 </a>
                 <a
                   href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
@@ -95,7 +95,7 @@ export function Join() {
                   rel="noopener noreferrer"
                   className="hud-button inline-block text-[10px]"
                 >
-                  Leaderboard code (Sakuna fork)
+                  Leaderboard code (SUKUNA fork)
                 </a>
               </div>
             </div>

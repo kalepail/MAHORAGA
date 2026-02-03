@@ -207,7 +207,7 @@ export function Terms({ navigate }: TermsProps) {
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            Maharaga GitHub repository (agent code)
+            MAHORAGA GitHub repository (agent code)
           </a>
           . The leaderboard code lives in the{" "}
           <a
@@ -216,7 +216,7 @@ export function Terms({ navigate }: TermsProps) {
             rel="noopener noreferrer"
             className="text-hud-text hover:text-hud-text-bright transition-colors underline"
           >
-            Sakuna fork leaderboard directory
+            SUKUNA fork leaderboard directory
           </a>
           .
         </p>

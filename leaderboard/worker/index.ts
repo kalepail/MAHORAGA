@@ -1,5 +1,5 @@
 /**
- * Sakuna — Maharaga Leaderboard Worker — Entry Point
+ * SUKUNA - MAHORAGA Leaderboard Worker — Entry Point
  *
  * Thin router that delegates to:
  * - api.ts — HTTP API handlers (leaderboard, trader, OAuth, registration)
