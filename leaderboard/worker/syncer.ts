@@ -99,6 +99,21 @@ export class SyncerDO extends DurableObject<Env> {
       const equity = account.equity;
       const cash = account.cash;
 
+      // ---------------------------------------------------------------
+      // Detect Reset/Deleted Accounts
+      // ---------------------------------------------------------------
+      // If equity is 0 with no positions and no trades, the account was likely
+      // reset or deleted in Alpaca. This is NOT a genuine -100% loss through
+      // trading. Return an error so the user can re-connect with their new account.
+      if (equity === 0 && positions.length === 0 && filledCount === 0) {
+        return {
+          success: false,
+          traderId,
+          error: "Account appears to be reset or deleted (zero equity, no positions, no trades)",
+          alpacaStatus: 200, // Not a token issue, just empty account
+        };
+      }
+
       // Day P&L: change in equity since previous market close.
       // Alpaca updates `last_equity` at end of each trading day.
       const dayPnl = equity - account.last_equity;
@@ -156,12 +171,19 @@ export class SyncerDO extends DurableObject<Env> {
       // Write to D1 in a single batch (transactional)
       // ---------------------------------------------------------------
 
+      // Preserve existing composite_score (computed by cron) before overwriting.
+      // We fetch it first because INSERT OR REPLACE deletes the old row, and
+      // SQLite behavior with self-referencing subqueries in REPLACE is undefined.
+      const existingScore = await this.env.DB.prepare(
+        `SELECT composite_score FROM performance_snapshots
+         WHERE trader_id = ?1 AND snapshot_date = ?2`
+      ).bind(traderId, today).first<{ composite_score: number | null }>();
+
       const statements: D1PreparedStatement[] = [];
 
       // 1. Performance snapshot — one row per trader per day.
       //    INSERT OR REPLACE ensures only the latest sync for today is kept.
-      //    composite_score is set to NULL here and computed later by cron
-      //    (min-max normalization requires seeing all traders' data).
+      //    composite_score is preserved if it exists, otherwise NULL (computed by cron).
       //
       //    Column mapping:
       //      total_deposits    = effectiveDeposits (starting capital, not just CSD deposits)
@@ -175,7 +197,7 @@ export class SyncerDO extends DurableObject<Env> {
             total_pnl, total_pnl_pct, unrealized_pnl, realized_pnl,
             day_pnl, num_trades, num_winning_trades, win_rate,
             max_drawdown_pct, sharpe_ratio, open_positions, composite_score)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, NULL)`
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`
         ).bind(
           snapshotId,
           traderId,
@@ -193,7 +215,8 @@ export class SyncerDO extends DurableObject<Env> {
           winRate,
           maxDrawdownPct,
           sharpe,
-          positions.length
+          positions.length,
+          existingScore?.composite_score ?? null
         )
       );
 
@@ -221,27 +244,21 @@ export class SyncerDO extends DurableObject<Env> {
         ).bind(traderId, derivedAssetClass, lastTradeAt)
       );
 
-      // 3. Replace equity history (delete old, insert new)
-      // DELETE is in this batch so it's atomic with the snapshot write
-      statements.push(
-        this.env.DB.prepare(
-          `DELETE FROM equity_history WHERE trader_id = ?1`
-        ).bind(traderId)
-      );
-
       await this.env.DB.batch(statements);
 
-      // 4. Insert equity history points in batches.
+      // 3. Replace equity history with atomic delete + insert batches.
       //    Stores up to 365 daily data points from Alpaca's portfolio history.
       //    Used for sparklines on the leaderboard (last 30 points) and the
       //    equity curve chart on trader profiles (up to 90 days displayed).
-      //    Older history beyond 365 days is truncated.
-      const equityPoints: D1PreparedStatement[] = [];
+      //
+      //    Safety: Each batch includes DELETE (idempotent) + INSERTs so that
+      //    if a batch fails mid-way, re-running from scratch is safe.
       const maxPoints = Math.min(history.timestamp.length, 365);
       const startIdx = Math.max(0, history.timestamp.length - maxPoints);
 
+      const equityInserts: D1PreparedStatement[] = [];
       for (let i = startIdx; i < history.timestamp.length; i++) {
-        equityPoints.push(
+        equityInserts.push(
           this.env.DB.prepare(
             `INSERT INTO equity_history (id, trader_id, timestamp, equity, profit_loss, profit_loss_pct)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
@@ -256,27 +273,34 @@ export class SyncerDO extends DurableObject<Env> {
         );
       }
 
-      for (let i = 0; i < equityPoints.length; i += 80) {
-        await this.env.DB.batch(equityPoints.slice(i, i + 80));
+      // First batch: DELETE + first chunk of inserts (atomic)
+      // Subsequent batches: just inserts (DELETE already done)
+      const equityDeleteStmt = this.env.DB.prepare(
+        `DELETE FROM equity_history WHERE trader_id = ?1`
+      ).bind(traderId);
+
+      if (equityInserts.length > 0) {
+        const firstBatch = [equityDeleteStmt, ...equityInserts.slice(0, 79)];
+        await this.env.DB.batch(firstBatch);
+        for (let i = 79; i < equityInserts.length; i += 80) {
+          await this.env.DB.batch(equityInserts.slice(i, i + 80));
+        }
+      } else {
+        // No history points — just delete old data
+        await equityDeleteStmt.run();
       }
 
-      // 5. Upsert recent trades.
+      // 4. Replace recent trades with atomic delete + insert batches.
       //    Stores the latest 200 filled orders for display on the trader
       //    profile page. This is NOT the total trade count — that comes from
       //    fetchTotalFilledOrderCount() which paginates through all orders.
-      //    The trades table is delete-and-reinsert to stay fresh.
-      await this.env.DB.prepare(
-        `DELETE FROM trades WHERE trader_id = ?1`
-      ).bind(traderId).run();
-
-      const tradeStatements: D1PreparedStatement[] = [];
+      const tradeInserts: D1PreparedStatement[] = [];
       for (const order of recentOrders.slice(0, 200)) {
         if (!order.filled_at || !order.filled_avg_price) continue;
 
-        let assetClass = "stocks";
-        if (order.asset_class === "crypto") assetClass = "crypto";
+        const assetClass = order.asset_class === "crypto" ? "crypto" : "stocks";
 
-        tradeStatements.push(
+        tradeInserts.push(
           this.env.DB.prepare(
             `INSERT OR IGNORE INTO trades (id, trader_id, symbol, side, qty, price, filled_at, asset_class)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
@@ -293,11 +317,23 @@ export class SyncerDO extends DurableObject<Env> {
         );
       }
 
-      for (let i = 0; i < tradeStatements.length; i += 80) {
-        await this.env.DB.batch(tradeStatements.slice(i, i + 80));
+      // First batch: DELETE + first chunk of inserts (atomic)
+      const tradesDeleteStmt = this.env.DB.prepare(
+        `DELETE FROM trades WHERE trader_id = ?1`
+      ).bind(traderId);
+
+      if (tradeInserts.length > 0) {
+        const firstBatch = [tradesDeleteStmt, ...tradeInserts.slice(0, 79)];
+        await this.env.DB.batch(firstBatch);
+        for (let i = 79; i < tradeInserts.length; i += 80) {
+          await this.env.DB.batch(tradeInserts.slice(i, i + 80));
+        }
+      } else {
+        // No trades — just delete old data
+        await tradesDeleteStmt.run();
       }
 
-      // 6. Update oauth_tokens last_used_at
+      // 5. Update oauth_tokens last_used_at
       await this.env.DB.prepare(
         `UPDATE oauth_tokens SET last_used_at = datetime('now') WHERE trader_id = ?1`
       ).bind(traderId).run();
@@ -319,7 +355,7 @@ export class SyncerDO extends DurableObject<Env> {
         : (err instanceof Error ? err.message : "Unknown error");
 
       console.error(`[syncer] Sync failed for trader ${traderId}:`, msg,
-        isAlpacaError ? err.body : "");
+        isAlpacaError ? err.sanitizedBody : "");
 
       return {
         success: false,

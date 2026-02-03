@@ -54,11 +54,18 @@ export function calcSharpeRatio(
 ): number | null {
   if (dailyEquity.length < 5) return null;
 
-  // Calculate daily returns as percentage change between consecutive days
+  // Calculate daily returns as percentage change between consecutive days.
+  // Skip invalid data points: non-positive values, NaN, or Infinity.
   const returns: number[] = [];
   for (let i = 1; i < dailyEquity.length; i++) {
-    if (dailyEquity[i - 1] <= 0) continue; // skip invalid data points
-    returns.push((dailyEquity[i] - dailyEquity[i - 1]) / dailyEquity[i - 1]);
+    const prev = dailyEquity[i - 1];
+    const curr = dailyEquity[i];
+    // Validate both values are finite positive numbers
+    if (!Number.isFinite(prev) || !Number.isFinite(curr) || prev <= 0) continue;
+    const ret = (curr - prev) / prev;
+    // Skip if return is not finite (handles edge cases like huge jumps)
+    if (!Number.isFinite(ret)) continue;
+    returns.push(ret);
   }
 
   if (returns.length < 4) return null;
@@ -76,10 +83,13 @@ export function calcSharpeRatio(
   const stdDev = Math.sqrt(variance);
 
   // Zero volatility = undefined Sharpe (division by zero)
-  if (stdDev === 0) return null;
+  if (stdDev === 0 || !Number.isFinite(stdDev)) return null;
 
   // Annualize: multiply by sqrt(trading days per year)
-  return ((mean - dailyRf) / stdDev) * Math.sqrt(252);
+  const sharpe = ((mean - dailyRf) / stdDev) * Math.sqrt(252);
+
+  // Final validation: ensure result is finite
+  return Number.isFinite(sharpe) ? sharpe : null;
 }
 
 /**
@@ -108,14 +118,17 @@ export function calcSharpeRatio(
 export function calcMaxDrawdown(dailyEquity: number[]): number {
   if (dailyEquity.length < 2) return 0;
 
-  let peak = dailyEquity[0];
+  let peak = 0;
   let maxDd = 0;
 
   for (const eq of dailyEquity) {
+    // Skip invalid values (NaN, Infinity, negative)
+    if (!Number.isFinite(eq) || eq < 0) continue;
+
     if (eq > peak) peak = eq;       // new high-water mark
     if (peak > 0) {
       const dd = ((peak - eq) / peak) * 100;
-      if (dd > maxDd) maxDd = dd;   // worst decline so far
+      if (Number.isFinite(dd) && dd > maxDd) maxDd = dd;   // worst decline so far
     }
   }
 

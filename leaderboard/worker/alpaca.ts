@@ -294,12 +294,26 @@ export async function fetchTotalFilledOrderCount(
 // Errors
 // ---------------------------------------------------------------------------
 
+/** Sanitize error response body to remove any potentially sensitive info. */
+function sanitizeErrorBody(body: string): string {
+  // Truncate to reasonable length and strip common patterns that might leak info
+  let sanitized = body.slice(0, 200);
+  // Remove any JSON keys that could contain sensitive data
+  sanitized = sanitized.replace(/"(access_token|api_key|secret|password|token)":\s*"[^"]*"/gi, '"$1":"[REDACTED]"');
+  return sanitized;
+}
+
 export class AlpacaError extends Error {
+  /** Sanitized error body (safe for logging). */
+  public sanitizedBody: string;
+
   constructor(
     public endpoint: string,
     public status: number,
-    public body: string
+    body: string
   ) {
-    super(`Alpaca ${endpoint} failed (${status}): ${body.slice(0, 200)}`);
+    const sanitized = sanitizeErrorBody(body);
+    super(`Alpaca ${endpoint} failed (${status}): ${sanitized}`);
+    this.sanitizedBody = sanitized;
   }
 }

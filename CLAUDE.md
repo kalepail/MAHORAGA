@@ -88,6 +88,7 @@ Feature flags and risk defaults are set as `vars` in `wrangler.jsonc`, NOT as se
 - **Custom domain not yet configured** — `mahoraga.dev` is a landing page (static HTML docs). The worker deploys to `*.workers.dev` by default. Custom domain requires adding routes in `wrangler.jsonc`.
 - **Cron triggers don't fire locally** — use `curl http://localhost:8787/cdn-cgi/handler/scheduled` to test.
 - **`ALPACA_PAPER=true` is critical** — setting to `false` trades real money.
+- **Leaderboard: Use `npm run deploy`, NOT `npx wrangler deploy`** — The leaderboard uses the Cloudflare Vite plugin which requires `vite build` before deploy. The `npm run deploy` script runs both (`vite build && wrangler deploy`). Running `wrangler deploy` directly will deploy stale compiled code.
 
 ## Git Remotes
 

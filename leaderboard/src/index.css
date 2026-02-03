@@ -82,6 +82,12 @@
     color: var(--color-hud-text-dim);
   }
 
+  .hud-body {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    color: var(--color-hud-text-dim);
+  }
+
   .hud-value-xl {
     font-size: 36px;
     font-weight: 300;

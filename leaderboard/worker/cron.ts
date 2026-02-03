@@ -94,16 +94,23 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
     FROM latest
   `).first<ScoreRangesRow>();
 
-  if (!ranges || ranges.roi_min === null) return;
+  // Validate we have at least one snapshot with ROI data
+  if (!ranges || ranges.roi_min === null || ranges.roi_max === null) {
+    console.log("[cron] No snapshots with ROI data, skipping composite score computation");
+    return;
+  }
 
-  const roiMin  = ranges.roi_min  ?? 0;
-  const roiMax  = ranges.roi_max  ?? 0;
+  // Extract ranges with safe defaults for optional metrics.
+  // ROI and inverse max drawdown are always present (required fields in snapshot).
+  // Sharpe and win_rate may be null if insufficient trading history.
+  const roiMin  = ranges.roi_min;
+  const roiMax  = ranges.roi_max;
   const shMin   = ranges.sharpe_min ?? 0;
   const shMax   = ranges.sharpe_max ?? 0;
-  const wrMin   = ranges.wr_min   ?? 0;
-  const wrMax   = ranges.wr_max   ?? 0;
-  const imddMin = ranges.imdd_min ?? 0;
-  const imddMax = ranges.imdd_max ?? 0;
+  const wrMin   = ranges.wr_min ?? 0;
+  const wrMax   = ranges.wr_max ?? 0;
+  const imddMin = ranges.imdd_min ?? 100;  // 100% = 0% drawdown (safest)
+  const imddMax = ranges.imdd_max ?? 100;
 
   await env.DB.prepare(`
     WITH latest AS (

@@ -100,6 +100,13 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   //
   // The min_trades filter (default 0) excludes traders with fewer total
   // filled orders, preventing one-shot luck from appearing on the board.
+  //
+  // Security: Compute date boundary in JS to avoid SQL string concatenation.
+  // This prevents any possibility of injection through the period parameter.
+  const periodDays = Math.max(1, Math.min(safeParseInt(period, 30), 365));
+  const dateBoundary = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000)
+    .toISOString().split("T")[0];
+
   let query = `
     SELECT
       t.id, t.username, t.github_repo, t.asset_class,
@@ -113,12 +120,12 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
       AND ps.snapshot_date = (
         SELECT MAX(snapshot_date) FROM performance_snapshots
         WHERE trader_id = t.id
-          AND snapshot_date >= date('now', '-' || ?1 || ' days')
+          AND snapshot_date >= ?1
       )
     WHERE t.is_active = 1 AND (ps.trader_id IS NULL OR COALESCE(ps.num_trades, 0) >= ?2)
   `;
 
-  const params: (string | number)[] = [period, minTrades];
+  const params: (string | number)[] = [dateBoundary, minTrades];
 
   // Asset class filter: "stocks" or "crypto" also includes traders classified
   // as "both" (they trade both asset types and belong in either filtered view).
@@ -126,8 +133,16 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
     query += ` AND (t.asset_class = ?${params.length + 1} OR t.asset_class = 'both')`;
     params.push(assetClass);
   }
-  // NULLS LAST ensures traders with no data (pending sync) appear at the bottom.
-  query += ` ORDER BY ps.${sortCol} ${sortDir} NULLS LAST`;
+  // Use COALESCE to handle NULL scores - treat NULL as -infinity for DESC sorts.
+  // This ensures traders with no composite score yet are ranked by their ROI.
+  // Secondary sort by total_pnl_pct ensures sensible ordering when primary sort values are equal.
+  const primaryExpr = sortCol === "max_drawdown_pct"
+    ? `COALESCE(ps.${sortCol}, 999)`  // ASC: NULL = worst (high drawdown)
+    : `COALESCE(ps.${sortCol}, -999999)`;  // DESC: NULL = worst (negative)
+  const secondarySort = sortCol === "total_pnl_pct"
+    ? "COALESCE(ps.num_trades, 0) DESC"
+    : "COALESCE(ps.total_pnl_pct, -999999) DESC";
+  query += ` ORDER BY ${primaryExpr} ${sortDir}, ${secondarySort}`;
   query += ` LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`;
   params.push(limit, offset);
 
@@ -290,12 +305,15 @@ export async function getTraderEquity(
 
   if (!trader) return json({ error: "Trader not found" }, 404);
 
+  // Security: Compute date boundary in JS to avoid SQL string concatenation.
+  const dateBoundary = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
   const result = await env.DB.prepare(
     `SELECT timestamp, equity, profit_loss, profit_loss_pct
      FROM equity_history
-     WHERE trader_id = ?1 AND timestamp >= datetime('now', '-' || ?2 || ' days')
+     WHERE trader_id = ?1 AND timestamp >= ?2
      ORDER BY timestamp ASC`
-  ).bind(trader.id, days).all();
+  ).bind(trader.id, dateBoundary).all();
 
   const data = { equity: result.results };
   try { await setCachedTraderEquity(env, username, days, data); }

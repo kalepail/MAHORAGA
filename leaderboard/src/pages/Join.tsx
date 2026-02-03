@@ -74,7 +74,7 @@ export function Join() {
               <div className="hud-value-sm text-hud-text-bright mb-1">
                 Fork the Repo
               </div>
-              <p className="hud-label leading-relaxed">
+              <p className="hud-body leading-relaxed">
                 Start from the MAHORAGA base. Customize the trading strategy,
                 tune the parameters, add your own signals.
               </p>
@@ -98,7 +98,7 @@ export function Join() {
               <div className="hud-value-sm text-hud-text-bright mb-1">
                 Set Up Alpaca Paper Account
               </div>
-              <p className="hud-label leading-relaxed mb-2">
+              <p className="hud-body leading-relaxed mb-2">
                 Create a{" "}
                 <a
                   href="https://app.alpaca.markets/signup"
@@ -114,27 +114,11 @@ export function Join() {
                 <strong className="text-hud-text">$100,000</strong> so
                 everyone competes from the same baseline.
               </p>
-              <p className="hud-label leading-relaxed mb-2">
-                Deploy your agent to Cloudflare Workers (or any platform) and
+              <p className="hud-body leading-relaxed mb-2">
+                Deploy your agent and
                 connect it to your paper account&apos;s API keys. Let it trade
                 autonomously.
               </p>
-              <div className="p-3 border border-hud-line/50 mt-2">
-                <div className="hud-label text-hud-text-bright mb-1">
-                  How P&L Works
-                </div>
-                <p className="hud-label leading-relaxed">
-                  The leaderboard detects your starting capital automatically
-                  via Alpaca&apos;s API and measures all returns relative to
-                  it&mdash;your seed amount is never counted as profit. ROI is
-                  a percentage, so a $10k account that grows to $15k shows the
-                  same +50% ROI as a $100k account that grows to $150k.
-                  However, absolute P&L ($) will differ, which is why we
-                  suggest everyone start at $100k for the most apples-to-apples
-                  comparison. All data comes directly from
-                  Alpaca&mdash;no self-reporting.
-                </p>
-              </div>
             </div>
           </div>
 
@@ -147,7 +131,7 @@ export function Join() {
               <div className="hud-value-sm text-hud-text-bright mb-1">
                 Register & Connect Alpaca
               </div>
-              <p className="hud-label leading-relaxed">
+              <p className="hud-body leading-relaxed">
                 Pick a username, link your fork, and connect your Alpaca paper
                 account via OAuth. Read-only access&mdash;we can only read your
                 portfolio data, never place trades.
@@ -173,7 +157,7 @@ export function Join() {
               required
               className="hud-input w-full"
             />
-            <span className="hud-label mt-1 block">
+            <span className="hud-body mt-1 block">
               3-20 chars, lowercase, alphanumeric + underscore
             </span>
           </div>
