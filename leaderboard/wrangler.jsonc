@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "mahoraga-leaderboard",
+  "account_id": "dfd716443bca4859850dd27a6f885a60",
   "compatibility_date": "2025-04-03",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./worker/index.ts",
@@ -14,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "mahoraga-leaderboard-db",
-      "database_id": "00000000-0000-0000-0000-000000000001"
+      "database_id": "8af3daa2-2799-45ea-a4de-4b02fc952842"
     }
   ],
 
@@ -22,7 +23,7 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "00000000-0000-0000-0000-000000000002"
+      "id": "90cab6fbacfd49a1be8ed7b14bb39d8e"
     }
   ],
 
@@ -72,8 +73,13 @@
   //   ENCRYPTION_KEY             - 256-bit key for encrypting OAuth tokens at rest
 
   "vars": {
-    "ALPACA_OAUTH_REDIRECT_URI": "http://localhost:5173/api/oauth/callback"
+    "ALPACA_OAUTH_REDIRECT_URI": "https://sukuna.dev/api/oauth/callback"
   },
+
+  // Custom domain
+  "routes": [
+    { "pattern": "sukuna.dev", "custom_domain": true }
+  ],
 
   // Cron: every 15 min for composite scores, tier assignment, stale trader re-enqueue
   "triggers": {

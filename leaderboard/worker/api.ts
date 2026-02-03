@@ -31,6 +31,11 @@ import type {
 
 const ALPACA_PAPER_API = "https://paper-api.alpaca.markets";
 
+/** Normalize a GitHub URL for dedup: lowercase, strip trailing slash and .git */
+function normalizeGithubUrl(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\/+$/, "").replace(/\.git$/, "");
+}
+
 // ---------------------------------------------------------------------------
 // Leaderboard query options
 // ---------------------------------------------------------------------------
@@ -315,18 +320,26 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
     return json({ error: "Repository URL must be on github.com" }, 400);
   }
 
-  // Check D1 for existing username
-  const existing = await env.DB.prepare(
-    `SELECT id FROM traders WHERE username = ?1`
-  ).bind(username).first<Pick<TraderDbRow, "id">>();
+  const githubRepo = normalizeGithubUrl(body.github_repo);
 
-  if (existing) return json({ error: "Username already taken" }, 409);
+  // Check D1 for existing username and github_repo in parallel
+  const [existingUser, existingRepo] = await env.DB.batch([
+    env.DB.prepare(`SELECT id FROM traders WHERE username = ?1`).bind(username),
+    env.DB.prepare(`SELECT id FROM traders WHERE github_repo = ?1`).bind(githubRepo),
+  ]);
+
+  if (existingUser.results.length > 0) {
+    return json({ error: "Username already taken" }, 409);
+  }
+  if (existingRepo.results.length > 0) {
+    return json({ error: "This GitHub repository is already registered" }, 409);
+  }
 
   // Store pending registration in KV (10 min TTL) — no D1 write yet
   const nonce = crypto.randomUUID();
   const pending: PendingRegistration = {
     username,
-    github_repo: body.github_repo.trim(),
+    github_repo: githubRepo,
   };
   await env.KV.put(`pending_reg:${nonce}`, JSON.stringify(pending), {
     expirationTtl: 600,
@@ -377,13 +390,17 @@ export async function handleOAuthCallback(
 
   const pending: PendingRegistration = JSON.parse(pendingJson);
 
-  // Re-check username uniqueness (could have been taken during OAuth flow)
-  const existing = await env.DB.prepare(
-    `SELECT id FROM traders WHERE username = ?1`
-  ).bind(pending.username).first<Pick<TraderDbRow, "id">>();
+  // Re-check username + github_repo uniqueness (could have been taken during OAuth flow)
+  const [existingUser, existingRepo] = await env.DB.batch([
+    env.DB.prepare(`SELECT id FROM traders WHERE username = ?1`).bind(pending.username),
+    env.DB.prepare(`SELECT id FROM traders WHERE github_repo = ?1`).bind(pending.github_repo),
+  ]);
 
-  if (existing) {
+  if (existingUser.results.length > 0) {
     return json({ error: "Username was taken while you were connecting Alpaca" }, 409);
+  }
+  if (existingRepo.results.length > 0) {
+    return json({ error: "This GitHub repository was registered while you were connecting Alpaca" }, 409);
   }
 
   // Exchange code for token

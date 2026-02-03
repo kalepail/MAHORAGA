@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS traders (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_username ON traders(username);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_github_repo ON traders(github_repo);
 CREATE INDEX IF NOT EXISTS idx_traders_sync_tier ON traders(sync_tier);
 -- Partial index: active traders ordered by last_synced_at.
 -- Used by reEnqueueStaleTraders cron to efficiently find traders needing re-sync.
