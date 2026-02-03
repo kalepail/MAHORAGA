@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS traders (
   last_synced_at TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
   sync_tier INTEGER NOT NULL DEFAULT 4,
-  last_trade_at TEXT
+  last_trade_at TEXT,
+  first_failure_at TEXT,        -- when failure streak started (7-day grace period)
+  last_failure_reason TEXT      -- debug info for why sync is failing
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_username ON traders(username);

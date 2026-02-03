@@ -19,6 +19,8 @@ export interface TraderDbRow {
   is_active: number;   // 0 | 1
   sync_tier: number;
   last_trade_at: string | null;
+  first_failure_at: string | null;    // when failure streak started (7-day grace period)
+  last_failure_reason: string | null; // debug info for why sync is failing
 }
 
 export interface OAuthTokenDbRow {

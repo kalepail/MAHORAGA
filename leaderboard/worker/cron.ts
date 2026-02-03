@@ -1,10 +1,11 @@
 /**
  * Cron cycle: runs every 15 minutes.
  *
- * 1. Compute composite scores (min-max normalization across all traders)
- * 2. Assign sync tiers based on rank + activity
- * 3. Re-enqueue stale traders (safety net for lost queue messages)
- * 4. Rebuild KV caches (leaderboard + stats)
+ * 1. Purge dead accounts (inactive for 7+ days with no recovery)
+ * 2. Compute composite scores (min-max normalization across all traders)
+ * 3. Assign sync tiers based on rank + activity
+ * 4. Re-enqueue stale traders (safety net for lost queue messages)
+ * 5. Rebuild KV caches (leaderboard + stats)
  */
 
 import { tierDelaySeconds, type SyncTier } from "./tiers";
@@ -22,6 +23,9 @@ export async function runCronCycle(env: Env): Promise<void> {
 
   // Each step is isolated so a failure in one doesn't skip the rest.
   // E.g., if composite scores fail, tiers/caches/re-enqueue still run.
+  try { await purgeDeadAccounts(env); }
+  catch (err) { console.error("[cron] purgeDeadAccounts failed:", err instanceof Error ? err.message : err); }
+
   try { await computeAndStoreCompositeScores(env); }
   catch (err) { console.error("[cron] computeAndStoreCompositeScores failed:", err instanceof Error ? err.message : err); }
 
@@ -35,6 +39,47 @@ export async function runCronCycle(env: Env): Promise<void> {
   catch (err) { console.error("[cron] rebuildCaches failed:", err instanceof Error ? err.message : err); }
 
   console.log("[cron] Cycle complete");
+}
+
+/**
+ * Purge accounts that have been failing for 7+ days.
+ *
+ * When a trader gets a "bad signal" (401, reset account, etc.), they're marked
+ * inactive with first_failure_at set. If they recover (successful sync), the
+ * failure state is cleared. If they don't recover within 7 days, we permanently
+ * delete the account and all associated data.
+ *
+ * The DELETE CASCADE removes:
+ *   - oauth_tokens (foreign key)
+ *   - performance_snapshots (foreign key)
+ *   - equity_history (foreign key)
+ *   - trades (foreign key)
+ */
+async function purgeDeadAccounts(env: Env): Promise<void> {
+  // First, log which accounts we're about to purge (for audit trail)
+  const toPurge = await env.DB.prepare(`
+    SELECT id, username, first_failure_at, last_failure_reason
+    FROM traders
+    WHERE first_failure_at IS NOT NULL
+      AND first_failure_at < datetime('now', '-7 days')
+  `).all<{ id: string; username: string; first_failure_at: string; last_failure_reason: string | null }>();
+
+  if (toPurge.results.length === 0) {
+    return;
+  }
+
+  for (const row of toPurge.results) {
+    console.log(`[cron] Purging dead account: ${row.username} (id=${row.id}, failed=${row.first_failure_at}, reason=${row.last_failure_reason})`);
+  }
+
+  // DELETE CASCADE removes all associated data
+  const result = await env.DB.prepare(`
+    DELETE FROM traders
+    WHERE first_failure_at IS NOT NULL
+      AND first_failure_at < datetime('now', '-7 days')
+  `).run();
+
+  console.log(`[cron] Purged ${result.meta.changes} dead accounts`);
 }
 
 /**

@@ -1,0 +1,32 @@
+# Leaderboard Local Development Secrets
+# Copy this file to .dev.vars and fill in your values
+# .dev.vars is gitignored and should never be committed
+
+# ---------------------------------------------------------------------------
+# Alpaca OAuth App Credentials
+# ---------------------------------------------------------------------------
+# Create an OAuth app at https://app.alpaca.markets/brokerage/apps/manage
+# Set the redirect URI to http://localhost:5173/api/oauth/callback for local dev
+
+# OAuth Client ID (from Alpaca dashboard)
+ALPACA_OAUTH_CLIENT_ID=your_client_id_here
+
+# OAuth Client Secret (from Alpaca dashboard)
+ALPACA_OAUTH_CLIENT_SECRET=your_client_secret_here
+
+# ---------------------------------------------------------------------------
+# OAuth Redirect URI
+# ---------------------------------------------------------------------------
+# Must include "localhost" to enable the /api/dev/sync/:username endpoint
+# Production uses https://sukuna.dev/api/oauth/callback (set in wrangler.jsonc)
+
+ALPACA_OAUTH_REDIRECT_URI=http://localhost:5173/api/oauth/callback
+
+# ---------------------------------------------------------------------------
+# Encryption Key
+# ---------------------------------------------------------------------------
+# 256-bit key for encrypting OAuth tokens at rest in D1
+# Generate with: openssl rand -base64 32
+# IMPORTANT: Use the same key as production if testing with cloned remote data
+
+ENCRYPTION_KEY=your_base64_encoded_32_byte_key_here

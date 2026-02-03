@@ -4,5 +4,6 @@ dist-worker/
 .wrangler/
 .dev.vars
 .dev.vars.*
+!.dev.vars.example
 *.local
 worker-configuration.d.ts
