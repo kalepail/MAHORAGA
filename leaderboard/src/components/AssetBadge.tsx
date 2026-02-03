@@ -5,9 +5,9 @@ interface AssetBadgeProps {
 }
 
 const config = {
-  stocks: { label: "STOCKS", color: "text-hud-cyan border-hud-cyan/30" },
-  crypto: { label: "CRYPTO", color: "text-hud-purple border-hud-purple/30" },
-  both: { label: "BOTH", color: "text-hud-primary border-hud-primary/30" },
+  stocks: { label: "STOCKS", color: "text-hud-coral border-hud-coral/40" },
+  crypto: { label: "CRYPTO", color: "text-hud-violet border-hud-violet/40" },
+  both: { label: "BOTH", color: "text-hud-teal border-hud-teal/40" },
 };
 
 export function AssetBadge({ assetClass }: AssetBadgeProps) {
