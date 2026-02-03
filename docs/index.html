@@ -3,8 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAHORAGA — autonomous trading agent</title>
-  <meta name="description" content="An LLM-powered trading agent that monitors social sentiment and makes trading decisions using AI.">
+  <title>MAHORAGA — Open Source AI Trading Agent</title>
+  <meta name="description" content="An open-source LLM-powered trading agent that monitors social sentiment and makes autonomous trading decisions. Runs 24/7 on Cloudflare Workers.">
+  <link rel="canonical" href="https://mahoraga.dev/">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="MAHORAGA — Open Source AI Trading Agent">
+  <meta property="og:description" content="An open-source LLM-powered trading agent that monitors social sentiment and makes autonomous trading decisions. Runs 24/7 on Cloudflare Workers.">
+  <meta property="og:image" content="https://mahoraga.dev/og-image.png">
+  <meta property="og:url" content="https://mahoraga.dev/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MAHORAGA">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MAHORAGA — Open Source AI Trading Agent">
+  <meta name="twitter:description" content="An open-source LLM-powered trading agent that monitors social sentiment and makes autonomous trading decisions.">
+  <meta name="twitter:image" content="https://mahoraga.dev/og-image.png">
+  <meta name="twitter:creator" content="@burcs">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/mahoraga.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/og-image.png">
+
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://cdn.jsdelivr.net/npm/iosevka-webfont@14.0.0/iosevka.css" rel="stylesheet">
   <style>
@@ -427,6 +448,88 @@
       box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
   </style>
+
+  <!-- Structured Data: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "MAHORAGA",
+    "description": "An open-source LLM-powered trading agent that monitors social sentiment and makes autonomous trading decisions using AI. Runs 24/7 on Cloudflare Workers.",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Cloud (Cloudflare Workers)",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "url": "https://mahoraga.dev",
+    "codeRepository": "https://github.com/ygwyg/MAHORAGA",
+    "author": {
+      "@type": "Person",
+      "name": "burcs",
+      "url": "https://x.com/burcs"
+    }
+  }
+  </script>
+
+  <!-- Structured Data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What does the Mahoraga agent do?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The agent monitors StockTwits for trending stocks, uses OpenAI to research each signal (looking for red flags and catalysts), then executes trades through Alpaca based on LLM confidence scores."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Mahoraga decide to buy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "For each trending stock, the LLM analyzes: Is the sentiment justified? Is it too late? Any red flags? It returns BUY/SKIP/WAIT with a confidence score. Only signals with confidence >= 0.6 are executed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Mahoraga decide to sell?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Three ways: (1) Stop-loss/take-profit rules, (2) LLM analyzes each position and recommends HOLD/SELL based on sentiment changes, (3) Manual close via dashboard or MCP tools."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What APIs do I need for Mahoraga?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Alpaca (free) for trading. OpenAI (~$0.50-2/day using gpt-4o-mini) for analysis. StockTwits is free and requires no API key."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is my money safe with Mahoraga?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Start with paper trading (ALPACA_PAPER=true). The system has multiple safety layers: kill switch, position limits, daily loss limits, approval tokens, and no margin/shorting."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I customize the Mahoraga trading strategy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Edit src/durable-objects/mahoraga-harness.ts - it has clearly marked sections with [CUSTOMIZABLE] tags for data sources and trading logic."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <div class="disclaimer">For educational purposes only. Trading involves substantial risk of loss. Not financial advice.</div>
@@ -436,7 +539,7 @@
       <div class="hero-graphic">
         <img src="mahoraga.svg" alt="Mahoraga" class="logo-spinner">
       </div>
-      <div class="logo">Mahoraga</div>
+      <h1 class="logo">Mahoraga</h1>
       <p class="tagline">An LLM-powered trading agent that adapts to social sentiment and makes trading decisions using AI. Run locally or deploy to Cloudflare for 24/7 operation.</p>
     </header>
 
@@ -457,7 +560,7 @@
     </div>
 
     <div class="screenshot">
-      <img src="dashboard.png" alt="Mahoraga Dashboard">
+      <img src="dashboard.png" alt="Mahoraga Dashboard showing portfolio positions, trading signals, and AI analysis activity" width="800" height="500" loading="lazy">
     </div>
 
     <div class="warning">
