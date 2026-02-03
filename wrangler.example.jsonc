@@ -1,0 +1,104 @@
+{
+	"$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+	"name": "mahoraga",
+	"main": "src/index.ts",
+	"compatibility_date": "2024-12-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"vars": {
+		"ENVIRONMENT": "production",
+		"FEATURE_LLM_RESEARCH": "true",
+		"FEATURE_OPTIONS": "true",
+		"DEFAULT_MAX_POSITION_PCT": "0.10",
+		"DEFAULT_MAX_NOTIONAL_PER_TRADE": "5000",
+		"DEFAULT_MAX_DAILY_LOSS_PCT": "0.02",
+		"DEFAULT_COOLDOWN_MINUTES": "30",
+		"DEFAULT_MAX_OPEN_POSITIONS": "10",
+		"DEFAULT_APPROVAL_TTL_SECONDS": "300"
+	},
+	// Secrets (set via `wrangler secret put <NAME>`):
+	// Required:
+	// - ALPACA_API_KEY
+	// - ALPACA_API_SECRET
+	// - MAHORAGA_API_TOKEN (API authentication - generate with: openssl rand -base64 48)
+	// - KILL_SWITCH_SECRET (emergency kill switch + approval token signing)
+	// 
+	// LLM Provider (choose one mode):
+	// - LLM_PROVIDER ("openai-raw" | "ai-sdk" | "vercel-gateway", default: "openai-raw")
+	// - LLM_MODEL (model identifier, e.g. "gpt-4o-mini" or "anthropic/claude-sonnet-4")
+	//
+	// Provider API Keys (based on LLM_PROVIDER mode):
+	// - OPENAI_API_KEY (for openai-raw, or ai-sdk with OpenAI models)
+	// - ANTHROPIC_API_KEY (for ai-sdk with Anthropic models)
+	// - GOOGLE_GENERATIVE_AI_API_KEY (for ai-sdk with Google models)
+	// - XAI_API_KEY (for ai-sdk with xAI/Grok models)
+	// - DEEPSEEK_API_KEY (for ai-sdk with DeepSeek models)
+	// - AI_GATEWAY_API_KEY (for vercel-gateway unified access)
+	//
+	// Optional:
+	// - ALPACA_PAPER ("true" for paper trading)
+	// - TWITTER_BEARER_TOKEN
+	// - DISCORD_WEBHOOK_URL
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "mahoraga-db",
+			"database_id": "<YOUR_D1_DATABASE_ID>",
+			"migrations_dir": "migrations"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "CACHE",
+			"id": "<YOUR_KV_NAMESPACE_ID>"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ARTIFACTS",
+			"bucket_name": "mahoraga-artifacts"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SESSION",
+				"class_name": "SessionDO"
+			},
+			{
+				"name": "MCP_AGENT",
+				"class_name": "MahoragaMcpAgent"
+			},
+			{
+				"name": "MAHORAGA_HARNESS",
+				"class_name": "MahoragaHarness"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"SessionDO",
+				"MahoragaMcpAgent",
+				"MahoragaHarness"
+			]
+		}
+	],
+	"triggers": {
+		"crons": [
+			"*/5 13-20 * * 1-5",
+			"0 14 * * 1-5",
+			"30 21 * * 1-5",
+			"0 5 * * *",
+			"0 * * * *"
+		]
+	},
+	"build": {
+		"command": "npm run build"
+	},
+	"dev": {
+		"port": 8787
+	}
+}

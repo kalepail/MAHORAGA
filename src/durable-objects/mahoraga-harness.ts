@@ -339,7 +339,78 @@ const TICKER_BLACKLIST = new Set([
   "SO", "TO", "UP", "US", "WE", "AN", "AM", "AH", "OH", "OK", "HI", "YA", "YO",
   // More trading slang
   "BULL", "BEAR", "CALL", "PUTS", "HOLD", "SELL", "MOON", "PUMP", "DUMP", "BAGS", "TEND",
+  // Additional common words that appear as false positives
+  "START", "ABOUT", "NAME", "NEXT", "PLAY", "LIVE", "GAME", "BEST", "LINK", "READ",
+  "POST", "NEWS", "FREE", "LOOK", "HELP", "OPEN", "FULL", "VIEW", "REAL", "SEND",
+  "HIGH", "DROP", "FAST", "SAFE", "RISK", "TURN", "PLAN", "DEAL", "MOVE", "HUGE",
+  "EASY", "HARD", "LATE", "WAIT", "SOON", "STOP", "EXIT", "GAIN", "LOSS", "GROW",
+  "FALL", "JUMP", "KEEP", "COPY", "EDIT", "SAVE", "NOTE", "TIPS", "IDEA", "PLUS",
+  "ZERO", "SELF", "BOTH", "BETA", "TEST", "INFO", "DATA", "CASH", "WHAT", "WHEN",
+  "WHERE", "WHY", "WATCH", "LOVE", "HATE", "TECH", "HOPE", "FEAR", "WEEK", "LAST",
+  "PART", "SIDE", "STEP", "SURE", "TELL", "THINK", "TOLD", "TRUE", "TURN", "TYPE",
+  "UNIT", "USED", "VERY", "WANT", "WENT", "WERE", "YEAH", "YOUR", "ELSE", "AWAY",
+  "OTHER", "PRICE", "THEIR", "STILL", "CHEAP", "THESE", "LEAP", "EVERY", "SINCE",
+  "BEING", "THOSE", "DOING", "COULD", "WOULD", "SHOULD", "MIGHT", "MUST", "SHALL",
 ]);
+
+class ValidTickerCache {
+  private secTickers: Set<string> | null = null;
+  private lastSecRefresh = 0;
+  private alpacaCache: Map<string, boolean> = new Map();
+  private readonly SEC_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  async refreshSecTickersIfNeeded(): Promise<void> {
+    if (this.secTickers && Date.now() - this.lastSecRefresh < this.SEC_REFRESH_INTERVAL_MS) {
+      return;
+    }
+    try {
+      const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
+        headers: { "User-Agent": "Mahoraga Trading Bot" },
+      });
+      if (!res.ok) return;
+      const data = await res.json() as Record<string, { cik_str: number; ticker: string; title: string }>;
+      this.secTickers = new Set(
+        Object.values(data).map((e) => e.ticker.toUpperCase())
+      );
+      this.lastSecRefresh = Date.now();
+    } catch {
+      // Keep existing cache on failure
+    }
+  }
+
+  isKnownSecTicker(symbol: string): boolean {
+    return this.secTickers?.has(symbol.toUpperCase()) ?? false;
+  }
+
+  getCachedValidation(symbol: string): boolean | undefined {
+    return this.alpacaCache.get(symbol.toUpperCase());
+  }
+
+  setCachedValidation(symbol: string, isValid: boolean): void {
+    this.alpacaCache.set(symbol.toUpperCase(), isValid);
+  }
+
+  async validateWithAlpaca(
+    symbol: string,
+    alpaca: { trading: { getAsset(s: string): Promise<{ tradable: boolean } | null> } }
+  ): Promise<boolean> {
+    const upper = symbol.toUpperCase();
+    const cached = this.alpacaCache.get(upper);
+    if (cached !== undefined) return cached;
+
+    try {
+      const asset = await alpaca.trading.getAsset(upper);
+      const isValid = asset !== null && asset.tradable;
+      this.alpacaCache.set(upper, isValid);
+      return isValid;
+    } catch {
+      this.alpacaCache.set(upper, false);
+      return false;
+    }
+  }
+}
+
+const tickerCache = new ValidTickerCache();
 
 // ============================================================================
 // SECTION 2: HELPER FUNCTIONS
@@ -814,6 +885,8 @@ export class MahoragaHarness extends DurableObject<Env> {
   private async runDataGatherers(): Promise<void> {
     this.log("System", "gathering_data", {});
 
+    await tickerCache.refreshSecTickersIfNeeded();
+
     const [stocktwitsSignals, redditSignals, cryptoSignals] = await Promise.all([
       this.gatherStockTwits(),
       this.gatherReddit(),
@@ -845,22 +918,47 @@ export class MahoragaHarness extends DurableObject<Env> {
     const signals: Signal[] = [];
     const sourceWeight = SOURCE_CONFIG.weights.stocktwits;
 
+    const stocktwitsHeaders = {
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
+    };
+
+    const fetchWithRetry = async (url: string, maxRetries = 3): Promise<Response | null> => {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          const res = await fetch(url, { headers: stocktwitsHeaders });
+          if (res.ok) return res;
+          if (res.status === 403) {
+            await this.sleep(1000 * Math.pow(2, i));
+            continue;
+          }
+          return null;
+        } catch {
+          await this.sleep(1000 * Math.pow(2, i));
+        }
+      }
+      return null;
+    };
+
     try {
-      // Get trending symbols
-      const trendingRes = await fetch("https://api.stocktwits.com/api/2/trending/symbols.json");
-      if (!trendingRes.ok) return [];
+      const trendingRes = await fetchWithRetry("https://api.stocktwits.com/api/2/trending/symbols.json");
+      if (!trendingRes) {
+        this.log("StockTwits", "cloudflare_blocked", { 
+          message: "StockTwits API blocked by Cloudflare - using Reddit only" 
+        });
+        return [];
+      }
       const trendingData = await trendingRes.json() as { symbols?: Array<{ symbol: string }> };
       const trending = trendingData.symbols || [];
 
-      // Get sentiment for top trending
       for (const sym of trending.slice(0, 15)) {
         try {
-          const streamRes = await fetch(`https://api.stocktwits.com/api/2/streams/symbol/${sym.symbol}.json?limit=30`);
-          if (!streamRes.ok) continue;
+          const streamRes = await fetchWithRetry(`https://api.stocktwits.com/api/2/streams/symbol/${sym.symbol}.json?limit=30`);
+          if (!streamRes) continue;
           const streamData = await streamRes.json() as { messages?: Array<{ entities?: { sentiment?: { basic?: string } }; created_at?: string }> };
           const messages = streamData.messages || [];
 
-          // Analyze sentiment
           let bullish = 0, bearish = 0, totalTimeDecay = 0;
           for (const msg of messages) {
             const sentiment = msg.entities?.sentiment?.basic;
@@ -986,8 +1084,22 @@ export class MahoragaHarness extends DurableObject<Env> {
     }
 
     const signals: Signal[] = [];
+    const alpaca = createAlpacaProviders(this.env);
+
     for (const [symbol, data] of tickerData) {
       if (data.mentions >= 2) {
+        if (!tickerCache.isKnownSecTicker(symbol)) {
+          const cached = tickerCache.getCachedValidation(symbol);
+          if (cached === false) continue;
+          if (cached === undefined) {
+            const isValid = await tickerCache.validateWithAlpaca(symbol, alpaca);
+            if (!isValid) {
+              this.log("Reddit", "invalid_ticker_filtered", { symbol });
+              continue;
+            }
+          }
+        }
+
         const avgRawSentiment = data.rawSentiment / data.mentions;
         const avgQuality = data.totalQuality / data.mentions;
         const finalSentiment = data.totalQuality > 0
