@@ -235,19 +235,18 @@ export function Join() {
             {/* Body */}
             <div className="px-6 py-5">
               <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">
-                We read your portfolio data to display leaderboard stats. We
-                do not place trades or modify your account.{" "}
-                <a
-                  href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-hud-text underline"
-                >
-                  Source code
-                </a>
+                By allowing{" "}
+                <strong className="text-hud-text">MAHORAGA Leaderboard</strong>{" "}
+                to access your Alpaca account, you are granting MAHORAGA
+                Leaderboard read access to your account information. We do not
+                place trades or modify your account.
+              </p>
+              <p className="hud-value-sm text-hud-text-dim leading-relaxed mb-4">
+                We read your account equity, positions, portfolio history, and
+                trade history to compute and display leaderboard metrics.
               </p>
               <p className="hud-value-sm text-hud-text-dim leading-relaxed">
-                You can revoke access anytime from your Alpaca dashboard.
+                You can revoke access at any time from your Alpaca dashboard.
               </p>
             </div>
 
