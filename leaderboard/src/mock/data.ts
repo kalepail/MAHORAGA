@@ -28,7 +28,11 @@ function generateEquityCurve(
 ): number[] {
   const rng = seededRandom(seed);
   const drift = (final - initial) / days;
-  const volatility = initial * 0.008;
+  // Volatility scales with both the base equity AND the magnitude of change
+  // This ensures even big gainers show realistic day-to-day swings
+  const baseVolatility = initial * 0.015;
+  const changeVolatility = Math.abs(final - initial) / days * 0.8;
+  const volatility = baseVolatility + changeVolatility;
   const points: number[] = [initial];
   for (let i = 1; i <= days; i++) {
     const prev = points[i - 1];
