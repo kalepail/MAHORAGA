@@ -70,13 +70,13 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   const sort = url.searchParams.get("sort") || "composite_score";
   const assetClass = url.searchParams.get("asset_class") || "all";
   const minTrades = safeParseInt(url.searchParams.get("min_trades"), 0);
-  const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 50), 100);
+  const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 100), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
   // Check KV cache (only for default pagination)
   const cacheKey = leaderboardCacheKey(period, sort, assetClass, minTrades);
   const cached = await getCachedLeaderboard(env, cacheKey);
-  if (cached && offset === 0 && limit === 50) {
+  if (cached && offset === 0 && limit === 100) {
     return new Response(cached, {
       headers: { "Content-Type": "application/json" },
     });

@@ -42,6 +42,8 @@ const ASSET_FILTERS: { value: AssetFilter; label: string }[] = [
   { value: "crypto", label: "Crypto" },
 ];
 
+const TRADERS_PER_PAGE = 100;
+
 /** Shared style for pill-style toggle buttons in the filter bar. */
 const pillClass = (active: boolean) =>
   clsx(
@@ -57,6 +59,9 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   const [stats, setStats] = useState<LeaderboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
@@ -67,11 +72,13 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
 
     setLoading(true);
     setError(null);
+    setOffset(0);
     try {
       const params = new URLSearchParams({
         period: period === "all" ? "9999" : period,
         sort,
         asset_class: assetFilter,
+        limit: String(TRADERS_PER_PAGE),
       });
       const res = await fetch(`/api/leaderboard?${params}`, {
         signal: controller.signal,
@@ -79,6 +86,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
       if (!res.ok) throw new Error("Failed to load leaderboard");
       const data: LeaderboardResponse = await res.json();
       setTraders(data.traders);
+      setHasMore(data.traders.length === TRADERS_PER_PAGE);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -86,6 +94,30 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
       setLoading(false);
     }
   }, [period, sort, assetFilter]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const newOffset = offset + TRADERS_PER_PAGE;
+    try {
+      const params = new URLSearchParams({
+        period: period === "all" ? "9999" : period,
+        sort,
+        asset_class: assetFilter,
+        limit: String(TRADERS_PER_PAGE),
+        offset: String(newOffset),
+      });
+      const res = await fetch(`/api/leaderboard?${params}`);
+      if (res.ok) {
+        const data: LeaderboardResponse = await res.json();
+        setTraders((prev) => [...prev, ...data.traders]);
+        setOffset(newOffset);
+        setHasMore(data.traders.length === TRADERS_PER_PAGE);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -223,9 +255,29 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
                   onClick={() => navigate(`/trader/${trader.username}`)}
                 />
               ))}
+            {loadingMore && (
+              <tr>
+                <td colSpan={10} className="px-4 py-6 text-center">
+                  <span className="hud-label">Loading...</span>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Load More */}
+      {!loading && !error && hasMore && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="hud-button text-[11px]"
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

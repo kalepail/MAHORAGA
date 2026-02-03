@@ -1,8 +1,3 @@
-
-- rename or work in the sukuna name
-
----
-
 - review logging and error reporting and ensure it's good across both stacks
 - Codex, Kimi and Claude deep research, audit and improvements after documents and cross references
 - Add a Me link where you can easily find yourself in the list
