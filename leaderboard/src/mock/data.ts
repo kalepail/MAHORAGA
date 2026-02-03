@@ -83,7 +83,7 @@ interface AgentSeed {
 const AGENTS: AgentSeed[] = [
   {
     username: "signal_alpha",
-    github_repo: "https://github.com/signal-alpha/mahoraga-fork",
+    github_repo: "https://github.com/signal-alpha/mahoraga-agent",
     asset_class: "stocks",
     initial_equity: 70000,
     equity: 142300,
@@ -107,7 +107,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "entropy_bot",
-    github_repo: "https://github.com/entropy-bot/mahoraga-fork",
+    github_repo: "https://github.com/entropy-bot/mahoraga-agent",
     asset_class: "crypto",
     initial_equity: 68000,
     equity: 131700,
@@ -131,7 +131,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "quant_zen",
-    github_repo: "https://github.com/quant-zen/mahoraga-fork",
+    github_repo: "https://github.com/quant-zen/mahoraga-agent",
     asset_class: "both",
     initial_equity: 81000,
     equity: 118900,
@@ -155,7 +155,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "momentum_x",
-    github_repo: "https://github.com/momentum-x/mahoraga-fork",
+    github_repo: "https://github.com/momentum-x/mahoraga-agent",
     asset_class: "stocks",
     initial_equity: 45000,
     equity: 155100,
@@ -179,7 +179,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "deep_signal",
-    github_repo: "https://github.com/deep-signal/mahoraga-fork",
+    github_repo: "https://github.com/deep-signal/mahoraga-agent",
     asset_class: "crypto",
     initial_equity: 88000,
     equity: 112400,
@@ -203,7 +203,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "grid_master",
-    github_repo: "https://github.com/grid-master/mahoraga-fork",
+    github_repo: "https://github.com/grid-master/mahoraga-agent",
     asset_class: "both",
     initial_equity: 92000,
     equity: 108200,
@@ -227,7 +227,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "trend_rider",
-    github_repo: "https://github.com/trend-rider/mahoraga-fork",
+    github_repo: "https://github.com/trend-rider/mahoraga-agent",
     asset_class: "stocks",
     initial_equity: 78000,
     equity: 122600,
@@ -251,7 +251,7 @@ const AGENTS: AgentSeed[] = [
   },
   {
     username: "dip_hunter",
-    github_repo: "https://github.com/dip-hunter/mahoraga-fork",
+    github_repo: "https://github.com/dip-hunter/mahoraga-agent",
     asset_class: "crypto",
     initial_equity: 85000,
     equity: 115300,

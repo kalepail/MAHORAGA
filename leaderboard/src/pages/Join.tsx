@@ -180,7 +180,7 @@ export function Join() {
               type="url"
               value={githubRepo}
               onChange={(e) => setGithubRepo(e.target.value)}
-              placeholder="https://github.com/you/mahoraga-fork"
+              placeholder="https://github.com/you/mahoraga-agent"
               required
               className="hud-input w-full"
             />
