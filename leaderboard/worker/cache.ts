@@ -1,3 +1,5 @@
+import { SORT_FIELDS } from "./constants";
+
 /**
  * KV caching layer for leaderboard reads.
  *
@@ -137,10 +139,29 @@ export function leaderboardCacheKey(
 }
 
 // ---------------------------------------------------------------------------
-// Cache invalidation strategy
+// Cache invalidation
 // ---------------------------------------------------------------------------
-// All KV entries use TTLs (15 min for leaderboard, 5 min for trader data).
-// Stale entries expire naturally — no manual list+delete needed.
+
+/**
+ * Delete all cached leaderboard pages + stats.
+ * Called on new-trader registration so the new account appears immediately
+ * instead of waiting up to 15 min for TTL expiry.
+ */
+export async function invalidateLeaderboardCaches(env: Env): Promise<void> {
+  const keys: string[] = ["leaderboard:stats"];
+  for (const sort of SORT_FIELDS) {
+    keys.push(leaderboardCacheKey(sort, "asc", 0));
+    keys.push(leaderboardCacheKey(sort, "desc", 0));
+  }
+  await Promise.all(keys.map((k) => env.KV.delete(k)));
+}
+
+// ---------------------------------------------------------------------------
+// Cache invalidation – design notes
+// ---------------------------------------------------------------------------
+// Most KV entries rely on TTLs (15 min for leaderboard, 5 min for trader data).
+// invalidateLeaderboardCaches() is the one explicit flush, used only when a
+// new trader registers so they appear on the board immediately.
 // The cron pre-warm overwrites the default leaderboard key with fresh data.
 // Read-through caching overwrites keys on cache miss.
 

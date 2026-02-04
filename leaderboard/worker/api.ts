@@ -22,6 +22,7 @@ import {
   getCachedTraderEquity,
   setCachedTraderEquity,
   leaderboardCacheKey,
+  invalidateLeaderboardCaches,
 } from "./cache";
 import { json, safeParseInt, errorJson } from "./helpers";
 import { dbNow, dbTimeAgo } from "./dates";
@@ -579,6 +580,9 @@ export async function handleOAuthCallback(
        VALUES (?1, ?2, ?3, ?4, ?5)`
     ).bind(traderId, encryptedToken, account.id, account.equity, now),
   ]);
+
+  // Flush leaderboard caches so the new trader appears immediately
+  await invalidateLeaderboardCaches(env);
 
   // Enqueue immediate first sync
   await env.SYNC_QUEUE.send(
