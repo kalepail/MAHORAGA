@@ -1,20 +1,20 @@
 /**
  * Sync tier definitions for queue-based adaptive sync.
  *
- * Each trader is assigned a tier based on their composite score rank
- * and recent trading activity. The tier determines how frequently
- * their data is synced from Alpaca.
+ * Each trader is assigned a tier based purely on their leaderboard
+ * position (composite_score DESC with the standard tiebreaker cascade).
+ * The tier determines how frequently their data is synced from Alpaca.
  */
 
 export type SyncTier = 1 | 2 | 3 | 4 | 5;
 
 /** Delay in seconds between syncs for each tier. */
 const TIER_DELAYS: Record<SyncTier, number> = {
-  1: 60,       // 1 min  — Top 100 by composite score
-  2: 300,      // 5 min  — Rank 101–500
-  3: 900,      // 15 min — Rank 501–2000 OR trades in last 48h
-  4: 1800,     // 30 min — Active (trades in last 7d)
-  5: 21600,    // 6 hours — Dormant (no trades 30d+)
+  1: 300,      // 5 min   — Top 100
+  2: 1800,     // 30 min  — Rank 101–500
+  3: 21600,    // 6 hours — Rank 501–2000
+  4: 43200,    // 12 hours — Rank 2001–10000
+  5: 86400,    // 24 hours — Rank 10001+
 };
 
 export function tierDelaySeconds(tier: SyncTier): number {
@@ -32,11 +32,11 @@ export function tierDelaySeconds(tier: SyncTier): number {
  * and ~4x for lower tiers (where longer gaps are normal).
  */
 const STALE_THRESHOLDS: Record<SyncTier, number> = {
-  1: 600,      // 10 min  (10x tier delay) — top traders recover fast
-  2: 1800,     // 30 min  (6x tier delay)
-  3: 3600,     // 1 hour  (4x tier delay)
-  4: 7200,     // 2 hours (4x tier delay)
-  5: 86400,    // 24 hours (4x tier delay)
+  1: 1800,     // 30 min   (6x tier delay)
+  2: 7200,     // 2 hours  (4x tier delay)
+  3: 86400,    // 24 hours (4x tier delay)
+  4: 172800,   // 48 hours (4x tier delay)
+  5: 259200,   // 72 hours (3x tier delay)
 };
 
 export function tierStaleThresholdSeconds(tier: SyncTier): number {

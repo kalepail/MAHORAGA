@@ -3,7 +3,7 @@
  *
  * 1. Purge dead accounts (inactive for 7+ days with no recovery)
  * 2. Compute composite scores (min-max normalization across all traders)
- * 3. Assign sync tiers based on rank + activity
+ * 3. Assign sync tiers based on leaderboard rank
  * 4. Re-enqueue stale traders (safety net for lost queue messages)
  * 5. Rebuild KV caches (leaderboard + stats)
  */
@@ -233,33 +233,46 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
 /**
  * Assign sync tiers entirely in SQL using ROW_NUMBER() + UPDATE FROM.
  *
- * Tier 1: Top 100 by composite score
- * Tier 2: Rank 101-500
- * Tier 3: Rank 501-2000 OR trades in last 48h
- * Tier 4: Active (trades in last 7d)
- * Tier 5: Dormant (no trades 30d+ or never traded)
+ * Tiers mirror leaderboard position (composite_score DESC with the same
+ * tiebreaker cascade used by the leaderboard query):
+ *   Score → P&L$ → ROI% → Sharpe → Win Rate → MDD(ASC) → Trades → id
+ *
+ * Tier 1: Top 100       (synced every 5 min)
+ * Tier 2: Rank 101-500  (synced every 30 min)
+ * Tier 3: Rank 501-2000 (synced every 6 hours)
+ * Tier 4: Rank 2001-10000 (synced every 12 hours)
+ * Tier 5: Rank 10001+   (synced every 24 hours)
  *
  * Total: 1 D1 call regardless of trader count.
  */
 async function assignSyncTiers(env: Env): Promise<void> {
-  const cutoff48h = dbTimeAgo(48 * 3600);
-  const cutoff7d = dbTimeAgo(7 * 86400);
-
-  // Use window function to get latest composite_score per trader in a single scan.
-  // last_trade_at is already ISO 8601 — lexicographic comparison works directly.
+  // Rank uses the exact same tiebreaker cascade as the leaderboard query
+  // (buildTiebreakers in api.ts) so tier boundaries match what users see.
   const result = await env.DB.prepare(`
     WITH snapshot_ranked AS (
-      SELECT trader_id, composite_score,
+      SELECT trader_id, composite_score, total_pnl, total_pnl_pct,
+        sharpe_ratio, win_rate, max_drawdown_pct, num_trades,
         ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
       FROM performance_snapshots
     ),
     latest_scores AS (
-      SELECT trader_id, composite_score FROM snapshot_ranked WHERE rn = 1
+      SELECT trader_id, composite_score, total_pnl, total_pnl_pct,
+        sharpe_ratio, win_rate, max_drawdown_pct, num_trades
+      FROM snapshot_ranked WHERE rn = 1
     ),
     ranked AS (
       SELECT t.id,
-        t.last_trade_at,
-        ROW_NUMBER() OVER (ORDER BY COALESCE(ls.composite_score, 0) DESC) AS rk
+        ROW_NUMBER() OVER (
+          ORDER BY
+            COALESCE(ls.composite_score, -999999) DESC,
+            COALESCE(ls.total_pnl, -999999) DESC,
+            COALESCE(ls.total_pnl_pct, -999999) DESC,
+            COALESCE(ls.sharpe_ratio, -999999) DESC,
+            COALESCE(ls.win_rate, -999999) DESC,
+            COALESCE(ls.max_drawdown_pct, 999999999) ASC,
+            COALESCE(ls.num_trades, -999999) DESC,
+            t.id ASC
+        ) AS rk
       FROM traders t
       INNER JOIN oauth_tokens ot ON ot.trader_id = t.id
       LEFT JOIN latest_scores ls ON ls.trader_id = t.id
@@ -268,14 +281,13 @@ async function assignSyncTiers(env: Env): Promise<void> {
     UPDATE traders SET sync_tier = CASE
       WHEN ranked.rk <= 100 THEN 1
       WHEN ranked.rk <= 500 THEN 2
-      WHEN ranked.rk <= 2000
-        OR ranked.last_trade_at >= ?1 THEN 3
-      WHEN ranked.last_trade_at >= ?2 THEN 4
+      WHEN ranked.rk <= 2000 THEN 3
+      WHEN ranked.rk <= 10000 THEN 4
       ELSE 5
     END
     FROM ranked
     WHERE traders.id = ranked.id
-  `).bind(cutoff48h, cutoff7d).run();
+  `).run();
 
   console.log(`[cron] Assigned tiers to ${result.meta.changes} traders`);
 }
@@ -284,12 +296,12 @@ async function assignSyncTiers(env: Env): Promise<void> {
  * Safety net: re-enqueue active traders whose last sync is older than their
  * tier-appropriate staleness threshold.
  *
- * Tier-aware thresholds (vs. the old flat 24h):
- *   Tier 1 (1min sync):  stale after 10 min
- *   Tier 2 (5min sync):  stale after 30 min
- *   Tier 3 (15min sync): stale after 1 hour
- *   Tier 4 (30min sync): stale after 2 hours
- *   Tier 5 (6hr sync):   stale after 24 hours
+ * Tier-aware thresholds:
+ *   Tier 1 (5min sync):   stale after 30 min
+ *   Tier 2 (30min sync):  stale after 2 hours
+ *   Tier 3 (6hr sync):    stale after 24 hours
+ *   Tier 4 (12hr sync):   stale after 48 hours
+ *   Tier 5 (24hr sync):   stale after 72 hours
  *
  * Ordered by tier ASC so high-priority traders recover first when the limit
  * is hit. Limit raised to 500 to recover faster from mass failures.
