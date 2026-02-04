@@ -258,7 +258,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
             <MetricCard
               label="Max Drawdown"
               value={formatMetric(snapshot.max_drawdown_pct, 1, "%")}
-              positive={false}
               tooltip={METRIC_TOOLTIPS.maxDrawdown}
             />
             <MetricCard

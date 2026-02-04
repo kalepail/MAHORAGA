@@ -501,7 +501,7 @@ function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
             </span>
           </td>
           <td className="px-4 py-3 text-right">
-            <span className="hud-value-sm text-hud-error">
+            <span className="hud-value-sm">
               {formatMetric(trader.max_drawdown_pct, 1, "%")}
             </span>
           </td>
