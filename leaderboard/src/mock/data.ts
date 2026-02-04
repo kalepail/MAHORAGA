@@ -521,4 +521,5 @@ export const mockStats: LeaderboardStats = {
   total_traders: AGENTS.length,
   total_trades: AGENTS.reduce((sum, a) => sum + a.num_trades, 0),
   total_pnl: AGENTS.reduce((sum, a) => sum + a.total_pnl, 0),
+  last_updated: null,
 };

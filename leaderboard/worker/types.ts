@@ -5,6 +5,8 @@
  * D1 returns numbers as number, booleans as 0|1, and NULLs as null.
  */
 
+import type { DerivedAssetClass, TradeAssetClass } from "./constants";
+
 // ---------------------------------------------------------------------------
 // D1 Row Types (match db/schema.sql)
 // ---------------------------------------------------------------------------
@@ -13,7 +15,7 @@ export interface TraderDbRow {
   id: string;
   username: string;
   github_repo: string;
-  asset_class: string;
+  asset_class: DerivedAssetClass;
   joined_at: string;
   last_synced_at: string | null;
   is_active: number;   // 0 | 1
@@ -75,7 +77,7 @@ export interface TradeDbRow {
   qty: number;
   price: number;
   filled_at: string;
-  asset_class: string;
+  asset_class: TradeAssetClass;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +89,7 @@ export interface LeaderboardDbRow {
   id: string;
   username: string;
   github_repo: string;
-  asset_class: string;
+  asset_class: DerivedAssetClass;
   joined_at: string;
   equity: number;
   total_pnl: number;

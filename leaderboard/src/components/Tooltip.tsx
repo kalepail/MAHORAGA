@@ -100,7 +100,7 @@ export function Tooltip({
           ref={tooltipRef}
           id="tooltip"
           role="tooltip"
-          className="fixed z-50 px-3 py-2 bg-hud-bg-panel border border-hud-line text-[11px] text-hud-text leading-relaxed shadow-lg normal-case font-normal text-left"
+          className="fixed z-50 px-3 py-2 bg-hud-bg-panel border border-hud-line text-[11px] text-hud-text leading-relaxed shadow-lg normal-case font-normal text-left whitespace-normal"
           style={{
             maxWidth,
             top: coords.top,

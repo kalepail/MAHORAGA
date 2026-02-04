@@ -188,12 +188,12 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       {/* Metrics grid */}
       {snapshot && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+          {/* Headline: score, returns, daily snapshot */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
             <MetricCard
-              label="ROI"
-              value={formatPercent(snapshot.total_pnl_pct, 2)}
-              positive={snapshot.total_pnl_pct >= 0}
-              tooltip={METRIC_TOOLTIPS.roi}
+              label="Composite Score"
+              value={formatMetric(snapshot.composite_score)}
+              tooltip={METRIC_TOOLTIPS.score}
             />
             <MetricCard
               label="Total P&L"
@@ -203,14 +203,51 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               tooltip={METRIC_TOOLTIPS.pnl}
             />
             <MetricCard
+              label="ROI"
+              value={formatPercent(snapshot.total_pnl_pct, 2)}
+              positive={snapshot.total_pnl_pct >= 0}
+              tooltip={METRIC_TOOLTIPS.roi}
+            />
+            <MetricCard
+              label="Today"
+              value={formatPnl(snapshot.day_pnl)}
+              positive={snapshot.day_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.dayPnl}
+            />
+          </div>
+
+          {/* Portfolio state: current holdings & exposure */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
+            <MetricCard
+              label="Equity"
+              value={formatCurrency(snapshot.equity)}
+              tooltip={METRIC_TOOLTIPS.equity}
+            />
+            <MetricCard
+              label="Open Positions"
+              value={String(snapshot.open_positions)}
+              tooltip={METRIC_TOOLTIPS.openPositions}
+            />
+            <MetricCard
+              label="Unrealized P&L"
+              value={formatPnl(snapshot.unrealized_pnl)}
+              positive={snapshot.unrealized_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.unrealizedPnl}
+            />
+            <MetricCard
+              label="Realized P&L"
+              value={formatPnl(snapshot.realized_pnl)}
+              positive={snapshot.realized_pnl >= 0}
+              tooltip={METRIC_TOOLTIPS.realizedPnl}
+            />
+          </div>
+
+          {/* Risk & quality analytics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+            <MetricCard
               label="Sharpe Ratio"
               value={formatMetric(snapshot.sharpe_ratio, 2)}
               tooltip={METRIC_TOOLTIPS.sharpe}
-            />
-            <MetricCard
-              label="Composite Score"
-              value={formatMetric(snapshot.composite_score)}
-              tooltip={METRIC_TOOLTIPS.score}
             />
             <MetricCard
               label="Win Rate"
@@ -228,34 +265,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               label="Trades"
               value={formatMetric(snapshot.num_trades)}
               tooltip={METRIC_TOOLTIPS.trades}
-            />
-            <MetricCard
-              label="Today"
-              value={formatPnl(snapshot.day_pnl)}
-              positive={snapshot.day_pnl >= 0}
-              tooltip={METRIC_TOOLTIPS.dayPnl}
-            />
-            <MetricCard
-              label="Open Positions"
-              value={String(snapshot.open_positions)}
-              tooltip={METRIC_TOOLTIPS.openPositions}
-            />
-            <MetricCard
-              label="Equity"
-              value={formatCurrency(snapshot.equity)}
-              tooltip={METRIC_TOOLTIPS.equity}
-            />
-            <MetricCard
-              label="Unrealized P&L"
-              value={formatPnl(snapshot.unrealized_pnl)}
-              positive={snapshot.unrealized_pnl >= 0}
-              tooltip={METRIC_TOOLTIPS.unrealizedPnl}
-            />
-            <MetricCard
-              label="Realized P&L"
-              value={formatPnl(snapshot.realized_pnl)}
-              positive={snapshot.realized_pnl >= 0}
-              tooltip={METRIC_TOOLTIPS.realizedPnl}
             />
           </div>
         </>
@@ -302,9 +311,8 @@ function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
   return (
     <div className="hud-panel">
       <div className="px-4 py-3 border-b border-hud-line">
-        <span className="hud-label inline-flex items-center gap-1.5">
+        <span className="hud-label">
           Recent Trades
-          <InfoIcon tooltip={METRIC_TOOLTIPS.recentTrades} />
         </span>
         {trades.length > 0 && (
           <span className="hud-label text-hud-text-dim ml-2">({trades.length})</span>
@@ -321,21 +329,9 @@ function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
               <tr className="border-b border-hud-line">
                 <th className="hud-label text-left px-4 py-2 w-[30%]">Symbol</th>
                 <th className="hud-label text-left px-4 py-2 w-[15%]">Side</th>
-                <th className="hud-label text-right px-4 py-2 w-[20%]">
-                  <span className="inline-flex items-center gap-1.5">
-                    Qty <InfoIcon tooltip={METRIC_TOOLTIPS.tradeQty} />
-                  </span>
-                </th>
-                <th className="hud-label text-right px-4 py-2 w-[15%]">
-                  <span className="inline-flex items-center gap-1.5">
-                    Price <InfoIcon tooltip={METRIC_TOOLTIPS.tradePrice} />
-                  </span>
-                </th>
-                <th className="hud-label text-right px-4 py-2 w-[20%]">
-                  <span className="inline-flex items-center gap-1.5">
-                    Time <InfoIcon tooltip={METRIC_TOOLTIPS.tradeTime} />
-                  </span>
-                </th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">Qty</th>
+                <th className="hud-label text-right px-4 py-2 w-[15%]">Price</th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">Time</th>
               </tr>
             </thead>
             <tbody>

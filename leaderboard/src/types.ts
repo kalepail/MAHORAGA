@@ -23,8 +23,8 @@ export interface LeaderboardResponse {
   meta: {
     limit: number;
     offset: number;
-    sort: string;
-    sort_dir: string;
+    sort: SortField;
+    sort_dir: SortDir;
   };
 }
 
@@ -80,6 +80,7 @@ export interface EquityPoint {
   profit_loss_pct: number;
 }
 
+/** SortField must match SORT_FIELDS in worker/constants.ts */
 export type SortField =
   | "composite_score"
   | "total_pnl_pct"

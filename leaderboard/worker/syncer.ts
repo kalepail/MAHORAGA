@@ -19,6 +19,8 @@ import {
   AlpacaError,
 } from "./alpaca";
 import { calcSharpeRatio, calcMaxDrawdown, calcWinRate } from "./metrics";
+import { dbNow } from "./dates";
+import { normalizeAlpacaAssetClass, deriveTraderAssetClass } from "./constants";
 
 // D1 allows up to 100 statements per batch. We use 80 as a conservative
 // limit. The first batch in a delete+reinsert sequence reserves 1 slot
@@ -317,37 +319,27 @@ export class SyncerDO extends DurableObject<Env> {
       //    This is a sticky classification: once a trader has both stocks and
       //    crypto, they stay as "both" even if they later only trade one.
       //    Used for the asset class filter on the leaderboard (stocks/crypto/all).
-      const hasCrypto =
-        positions.some((p) => p.asset_class === "crypto") ||
-        recentOrders.some((o) => o.asset_class === "crypto");
-      const hasStocks =
-        positions.some((p) => p.asset_class !== "crypto") ||
-        recentOrders.some((o) => o.asset_class !== "crypto");
-      const derivedAssetClass = hasCrypto && hasStocks
-        ? "both"
-        : hasCrypto
-          ? "crypto"
-          : "stocks";
+      const derivedAssetClass = deriveTraderAssetClass(positions, recentOrders);
 
       // Update trader metadata including last_trade_at and incremental counting fields
       statements.push(
         this.env.DB.prepare(
           `UPDATE traders SET
-             last_synced_at = datetime('now'),
-             asset_class = ?2,
-             last_trade_at = ?3,
-             lifetime_trade_count = ?4,
-             last_count_order_submitted_at = ?5,
-             last_count_order_id = ?6
+             last_synced_at = ?2,
+             asset_class = ?3,
+             last_trade_at = ?4,
+             lifetime_trade_count = ?5,
+             last_count_order_submitted_at = ?6,
+             last_count_order_id = ?7
            WHERE id = ?1`
-        ).bind(traderId, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
+        ).bind(traderId, dbNow(), derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
       );
 
       // Record last successful API usage timestamp
       statements.push(
         this.env.DB.prepare(
-          `UPDATE oauth_tokens SET last_used_at = datetime('now') WHERE trader_id = ?1`
-        ).bind(traderId)
+          `UPDATE oauth_tokens SET last_used_at = ?2 WHERE trader_id = ?1`
+        ).bind(traderId, dbNow())
       );
 
       await this.env.DB.batch(statements);
@@ -405,7 +397,7 @@ export class SyncerDO extends DurableObject<Env> {
       for (const order of recentOrders.slice(0, 100)) {
         if (!order.filled_at || !order.filled_avg_price) continue;
 
-        const assetClass = order.asset_class === "crypto" ? "crypto" : "stocks";
+        const assetClass = normalizeAlpacaAssetClass(order.asset_class);
 
         tradeInserts.push(
           this.env.DB.prepare(

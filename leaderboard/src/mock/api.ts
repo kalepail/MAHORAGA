@@ -16,9 +16,11 @@ type NumericKey = "composite_score" | "total_pnl_pct" | "total_pnl" | "sharpe_ra
 function sortTraders(sort: string, dir: SortDir = "desc") {
   const field = sort as NumericKey;
   const copy = [...mockTraders];
+  // Match backend COALESCE behavior: NULLs always sort last regardless of direction
+  const nullSentinel = dir === "asc" ? Infinity : -Infinity;
   copy.sort((a, b) => {
-    const av = a[field] ?? -Infinity;
-    const bv = b[field] ?? -Infinity;
+    const av = a[field] ?? nullSentinel;
+    const bv = b[field] ?? nullSentinel;
     if (dir === "asc") return (av as number) - (bv as number);
     return (bv as number) - (av as number);
   });
@@ -62,14 +64,17 @@ export function mockFetch(
       (params.get("sort") as SortField) || "composite_score";
     const sortDir: SortDir =
       (params.get("sort_dir") as SortDir) || "desc";
+    const limit = parseInt(params.get("limit") || "100", 10);
+    const offset = parseInt(params.get("offset") || "0", 10);
 
-    const traders = sortTraders(sort, sortDir);
+    const sorted = sortTraders(sort, sortDir);
+    const traders = sorted.slice(offset, offset + limit);
 
     const response: LeaderboardResponse = {
       traders,
       meta: {
-        limit: 100,
-        offset: 0,
+        limit,
+        offset,
         sort,
         sort_dir: sortDir,
       },

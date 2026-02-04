@@ -16,12 +16,8 @@ import {
   invalidateLeaderboardCaches,
 } from "./cache";
 import { queryLeaderboard, queryStats } from "./api";
+import { dbTimeAgo } from "./dates";
 import type { SyncMessage, StaleTraderRow, ScoreRangesRow } from "./types";
-
-/** Format a JS Date to match SQLite's datetime() output: "YYYY-MM-DD HH:MM:SS". */
-function sqliteDatetime(date: Date): string {
-  return date.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
-}
 
 export async function runCronCycle(env: Env): Promise<void> {
   console.log("[cron] Starting cycle");
@@ -65,13 +61,15 @@ export async function runCronCycle(env: Env): Promise<void> {
  *   - trades (foreign key)
  */
 async function purgeDeadAccounts(env: Env): Promise<void> {
+  const cutoff = dbTimeAgo(7 * 86400);
+
   // First, log which accounts we're about to purge (for audit trail)
   const toPurge = await env.DB.prepare(`
     SELECT id, username, first_failure_at, last_failure_reason
     FROM traders
     WHERE first_failure_at IS NOT NULL
-      AND first_failure_at < datetime('now', '-7 days')
-  `).all<{ id: string; username: string; first_failure_at: string; last_failure_reason: string | null }>();
+      AND first_failure_at < ?1
+  `).bind(cutoff).all<{ id: string; username: string; first_failure_at: string; last_failure_reason: string | null }>();
 
   if (toPurge.results.length === 0) {
     return;
@@ -85,8 +83,8 @@ async function purgeDeadAccounts(env: Env): Promise<void> {
   const result = await env.DB.prepare(`
     DELETE FROM traders
     WHERE first_failure_at IS NOT NULL
-      AND first_failure_at < datetime('now', '-7 days')
-  `).run();
+      AND first_failure_at < ?1
+  `).bind(cutoff).run();
 
   console.log(`[cron] Purged ${result.meta.changes} dead accounts`);
 }
@@ -245,7 +243,11 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
  * Total: 1 D1 call regardless of trader count.
  */
 async function assignSyncTiers(env: Env): Promise<void> {
+  const cutoff48h = dbTimeAgo(48 * 3600);
+  const cutoff7d = dbTimeAgo(7 * 86400);
+
   // Use window function to get latest composite_score per trader in a single scan.
+  // last_trade_at is already ISO 8601 — lexicographic comparison works directly.
   const result = await env.DB.prepare(`
     WITH snapshot_ranked AS (
       SELECT trader_id, composite_score,
@@ -256,7 +258,8 @@ async function assignSyncTiers(env: Env): Promise<void> {
       SELECT trader_id, composite_score FROM snapshot_ranked WHERE rn = 1
     ),
     ranked AS (
-      SELECT t.id, t.last_trade_at,
+      SELECT t.id,
+        t.last_trade_at,
         ROW_NUMBER() OVER (ORDER BY COALESCE(ls.composite_score, 0) DESC) AS rk
       FROM traders t
       INNER JOIN oauth_tokens ot ON ot.trader_id = t.id
@@ -267,13 +270,13 @@ async function assignSyncTiers(env: Env): Promise<void> {
       WHEN ranked.rk <= 100 THEN 1
       WHEN ranked.rk <= 500 THEN 2
       WHEN ranked.rk <= 2000
-        OR ranked.last_trade_at >= datetime('now', '-48 hours') THEN 3
-      WHEN ranked.last_trade_at >= datetime('now', '-7 days') THEN 4
+        OR ranked.last_trade_at >= ?1 THEN 3
+      WHEN ranked.last_trade_at >= ?2 THEN 4
       ELSE 5
     END
     FROM ranked
     WHERE traders.id = ranked.id
-  `).run();
+  `).bind(cutoff48h, cutoff7d).run();
 
   console.log(`[cron] Assigned tiers to ${result.meta.changes} traders`);
 }
@@ -293,16 +296,12 @@ async function assignSyncTiers(env: Env): Promise<void> {
  * is hit. Limit raised to 500 to recover faster from mass failures.
  */
 async function reEnqueueStaleTraders(env: Env): Promise<void> {
-  // Compute per-tier cutoff timestamps in JS, formatted to match SQLite's
-  // datetime() output ("YYYY-MM-DD HH:MM:SS") so string comparisons are correct.
-  // last_synced_at is written by syncer.ts using datetime('now') which produces
-  // this exact format — using JS ISO format ("...T...Z") would break comparisons.
-  const now = Date.now();
-  const cutoff1 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(1) * 1000));
-  const cutoff2 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(2) * 1000));
-  const cutoff3 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(3) * 1000));
-  const cutoff4 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(4) * 1000));
-  const cutoff5 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(5) * 1000));
+  // Compute per-tier cutoff timestamps in ISO 8601 for direct string comparison.
+  const cutoff1 = dbTimeAgo(tierStaleThresholdSeconds(1));
+  const cutoff2 = dbTimeAgo(tierStaleThresholdSeconds(2));
+  const cutoff3 = dbTimeAgo(tierStaleThresholdSeconds(3));
+  const cutoff4 = dbTimeAgo(tierStaleThresholdSeconds(4));
+  const cutoff5 = dbTimeAgo(tierStaleThresholdSeconds(5));
 
   const stale = await env.DB.prepare(`
     SELECT t.id, t.sync_tier

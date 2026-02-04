@@ -24,6 +24,8 @@ import {
   leaderboardCacheKey,
 } from "./cache";
 import { json, safeParseInt, errorJson } from "./helpers";
+import { dbNow } from "./dates";
+import { SORT_FIELDS } from "./constants";
 import type {
   SyncMessage,
   TraderDbRow,
@@ -71,13 +73,18 @@ export interface LeaderboardQueryOptions {
 export async function getLeaderboard(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sort = url.searchParams.get("sort") || "composite_score";
-  const sortDir = url.searchParams.get("sort_dir") || "desc";
+  const sortDir = (url.searchParams.get("sort_dir") || "desc").toLowerCase();
   const minTrades = safeParseInt(url.searchParams.get("min_trades"), 0);
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 100), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
+  // Validate sort column before building cache key (prevents KV pollution
+  // from arbitrary query params like ?sort=evil_column).
+  const validSort = (SORT_FIELDS as readonly string[]).includes(sort) ? sort : "composite_score";
+  const validDir = (["asc", "desc"] as const).includes(sortDir as "asc" | "desc") ? sortDir : "desc";
+
   // Check KV cache (only for first page requests)
-  const cacheKey = leaderboardCacheKey(sort, sortDir, minTrades);
+  const cacheKey = leaderboardCacheKey(validSort, validDir, minTrades);
   const isFirstPage = offset === 0 && limit === 100;
 
   if (isFirstPage) {
@@ -90,7 +97,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   }
 
   const data = await queryLeaderboard(env, {
-    sort, sortDir, minTrades, limit, offset,
+    sort: validSort, sortDir: validDir, minTrades, limit, offset,
   });
 
   // Write-through cache for first page requests
@@ -106,11 +113,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   const { sort, sortDir: rawSortDir, minTrades, limit, offset } = opts;
 
   // Sort whitelist prevents SQL injection. Only these columns can be sorted.
-  const allowedSorts = [
-    "composite_score", "total_pnl_pct", "total_pnl",
-    "sharpe_ratio", "win_rate", "max_drawdown_pct", "num_trades",
-  ];
-  const sortCol = allowedSorts.includes(sort) ? sort : "composite_score";
+  const sortCol = (SORT_FIELDS as readonly string[]).includes(sort) ? sort : "composite_score";
 
   // Direction whitelist prevents SQL injection.
   const allowedDirs = ["asc", "desc"] as const;
@@ -145,7 +148,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
     FROM traders t
     LEFT JOIN latest_snapshots ls ON ls.trader_id = t.id AND ls.rn = 1
     WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?1)
-    ORDER BY ${sortDir === "ASC" ? `COALESCE(ls.${sortCol}, 999)` : `COALESCE(ls.${sortCol}, -999999)`} ${sortDir},
+    ORDER BY ${sortDir === "ASC" ? `COALESCE(ls.${sortCol}, 999999999)` : `COALESCE(ls.${sortCol}, -999999)`} ${sortDir},
       ${sortCol === "total_pnl_pct" ? "COALESCE(ls.num_trades, 0) DESC" : "COALESCE(ls.total_pnl_pct, -999999) DESC"}
     LIMIT ?2 OFFSET ?3
   `;
@@ -519,15 +522,16 @@ export async function handleOAuthCallback(
     traderId
   );
 
+  const now = dbNow();
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO traders (id, username, github_repo)
-       VALUES (?1, ?2, ?3)`
-    ).bind(traderId, pending.username, pending.github_repo),
-    env.DB.prepare(
-      `INSERT INTO oauth_tokens (trader_id, access_token_encrypted, alpaca_account_id, initial_equity)
+      `INSERT INTO traders (id, username, github_repo, joined_at)
        VALUES (?1, ?2, ?3, ?4)`
-    ).bind(traderId, encryptedToken, account.id, account.equity),
+    ).bind(traderId, pending.username, pending.github_repo, now),
+    env.DB.prepare(
+      `INSERT INTO oauth_tokens (trader_id, access_token_encrypted, alpaca_account_id, initial_equity, connected_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)`
+    ).bind(traderId, encryptedToken, account.id, account.equity, now),
   ]);
 
   // Enqueue immediate first sync

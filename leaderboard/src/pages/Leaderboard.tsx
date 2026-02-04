@@ -32,23 +32,29 @@ const NATURAL_DIR: Record<SortField, SortDir> = {
 const TRADERS_PER_PAGE = 100;
 
 // ---------------------------------------------------------------------------
-// Sort Arrow SVG
+// Sort Indicator (up + down triangles, always visible)
 // ---------------------------------------------------------------------------
 
-function SortArrow({ dir }: { dir: SortDir }) {
+function SortIndicator({ isActive, dir }: { isActive: boolean; dir: SortDir }) {
   return (
     <svg
-      width="8"
-      height="10"
-      viewBox="0 0 8 10"
-      fill="currentColor"
-      className="inline-block ml-1 opacity-80"
+      width="7"
+      height="12"
+      viewBox="0 0 7 12"
+      className="inline-block ml-0.5 shrink-0"
     >
-      {dir === "asc" ? (
-        <path d="M4 0L8 6H0L4 0Z" />
-      ) : (
-        <path d="M4 10L0 4H8L4 10Z" />
-      )}
+      {/* Up triangle — filled when active + asc */}
+      <path
+        d="M3.5 0.5L6.5 4.5H0.5L3.5 0.5Z"
+        fill="currentColor"
+        className={isActive && dir === "asc" ? "opacity-90" : "opacity-20"}
+      />
+      {/* Down triangle — filled when active + desc */}
+      <path
+        d="M3.5 11.5L0.5 7.5H6.5L3.5 11.5Z"
+        fill="currentColor"
+        className={isActive && dir === "desc" ? "opacity-90" : "opacity-20"}
+      />
     </svg>
   );
 }
@@ -77,13 +83,13 @@ function SortableHeader({
   const isActive = activeSort === field;
   return (
     <th
-      className="hud-label text-right px-4 py-3 cursor-pointer select-none hover:text-hud-text-bright transition-colors"
+      className="hud-label text-right px-4 py-3 whitespace-nowrap cursor-pointer select-none hover:text-hud-text-bright transition-colors"
       onClick={() => onSort(field)}
     >
       <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center mr-2"><InfoIcon tooltip={tooltip} /></span>
         {label}
-        {isActive && <SortArrow dir={activeDir} />}
-        <InfoIcon tooltip={tooltip} />
+        <SortIndicator isActive={isActive} dir={activeDir} />
       </span>
     </th>
   );
@@ -161,6 +167,12 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
+    // Attach to the same abortRef so fetchLeaderboard (on sort change)
+    // can cancel an in-flight loadMore and prevent stale data appending.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoadingMore(true);
     const newOffset = offset + TRADERS_PER_PAGE;
     try {
@@ -170,13 +182,17 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
         limit: String(TRADERS_PER_PAGE),
         offset: String(newOffset),
       });
-      const res = await fetch(`/api/leaderboard?${params}`);
+      const res = await fetch(`/api/leaderboard?${params}`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const data: LeaderboardResponse = await res.json();
         setTraders((prev) => [...prev, ...data.traders]);
         setOffset(newOffset);
         setHasMore(data.traders.length === TRADERS_PER_PAGE);
       }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
     } finally {
       setLoadingMore(false);
     }
@@ -226,23 +242,24 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-hud-line">
-              <th className="hud-label text-left px-4 py-3 w-[50px]">#</th>
-              <th className="hud-label text-left px-4 py-3">
+              <th className="hud-label text-left px-4 py-3 whitespace-nowrap w-[50px]">#</th>
+              <th className="hud-label text-left px-4 py-3 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5">
                   Agent
                   <InfoIcon tooltip={METRIC_TOOLTIPS.agentBadge} />
                 </span>
               </th>
               <SortableHeader label="Score" field="composite_score" tooltip={SORT_TOOLTIPS.composite_score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <SortableHeader label="P&L" field="total_pnl" tooltip={SORT_TOOLTIPS.total_pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={SORT_TOOLTIPS.sharpe_ratio} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <SortableHeader label="Win Rate" field="win_rate" tooltip={SORT_TOOLTIPS.win_rate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={SORT_TOOLTIPS.max_drawdown_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <SortableHeader label="Trades" field="num_trades" tooltip={SORT_TOOLTIPS.num_trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <th className="hud-label text-right px-4 py-3 w-[100px]">
+              <th className="hud-label text-right px-4 py-3 whitespace-nowrap w-[100px]">
                 <span className="inline-flex items-center gap-1.5">
-                  Equity Trend <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
+                  Equity Trend
+                  <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
                 </span>
               </th>
             </tr>
@@ -445,13 +462,13 @@ function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
             </span>
           </td>
           <td className="px-4 py-3 text-right">
-            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl_pct ?? 0))}>
-              {formatPercent(trader.total_pnl_pct ?? 0)}
+            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl ?? 0))}>
+              {formatPnl(trader.total_pnl ?? 0)}
             </span>
           </td>
           <td className="px-4 py-3 text-right">
-            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl ?? 0))}>
-              {formatPnl(trader.total_pnl ?? 0)}
+            <span className={clsx("hud-value-sm", pnlColor(trader.total_pnl_pct ?? 0))}>
+              {formatPercent(trader.total_pnl_pct ?? 0)}
             </span>
           </td>
           <td className="px-4 py-3 text-right">
@@ -472,9 +489,10 @@ function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
           <td className="px-4 py-3 text-right">
             <span className="hud-value-sm">{trader.num_trades ?? 0}</span>
           </td>
-          <td className="px-4 py-3 text-right">
+          <td className="px-4 py-3">
             <Sparkline
               data={trader.sparkline}
+              width="100%"
               positive={(trader.total_pnl_pct ?? 0) >= 0}
             />
           </td>

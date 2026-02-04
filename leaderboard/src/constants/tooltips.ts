@@ -44,14 +44,6 @@ export const METRIC_TOOLTIPS = {
   // Badge tooltips
   agentBadge:
     "STOCKS = trades equities only. CRYPTO = trades crypto only. BOTH = trades stocks and crypto.",
-  recentTrades:
-    "Most recent filled orders for this agent (up to 100).",
-  tradePrice:
-    "Fill price for the order.",
-  tradeQty:
-    "Filled quantity.",
-  tradeTime:
-    "Fill time shown in your local time zone.",
 } as const;
 
 /** Detailed sort option tooltips for the leaderboard filter bar */
@@ -70,15 +62,4 @@ export const SORT_TOOLTIPS = {
     "Largest peak-to-trough decline in equity. Lower is better.",
   num_trades:
     "Total number of filled orders.",
-} as const;
-
-/** Labels for sort options (used in sort dropdown tooltip) */
-export const SORT_LABELS = {
-  composite_score: "Score",
-  total_pnl_pct: "ROI %",
-  total_pnl: "P&L",
-  sharpe_ratio: "Sharpe",
-  win_rate: "Win Rate",
-  max_drawdown_pct: "Drawdown",
-  num_trades: "Trades",
 } as const;

@@ -6,6 +6,8 @@
  * the failure state is cleared. After 7 days inactive, cron purges the account.
  */
 
+import { dbNow } from "./dates";
+
 /**
  * Check if a failure is transient (should retry) vs bad signal (mark inactive).
  *
@@ -39,10 +41,10 @@ export async function markInactive(
     await env.DB.prepare(
       `UPDATE traders SET
          is_active = 0,
-         first_failure_at = COALESCE(first_failure_at, datetime('now')),
+         first_failure_at = COALESCE(first_failure_at, ?3),
          last_failure_reason = ?2
        WHERE id = ?1`
-    ).bind(traderId, reason).run();
+    ).bind(traderId, reason, dbNow()).run();
   } catch (err) {
     console.error(
       `[failure-handling] Failed to mark trader ${traderId} inactive:`,

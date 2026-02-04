@@ -1,4 +1,10 @@
 -- MAHORAGA Leaderboard Schema
+--
+-- Date convention: All datetime columns use ISO 8601 format (YYYY-MM-DDTHH:MM:SS.sssZ).
+-- This is the native output of JS Date.toISOString() and Alpaca API responses.
+-- ISO 8601 strings are lexicographically sortable, so SQL string comparisons work correctly.
+-- Enforced at the application layer (worker/dates.ts), not via CHECK constraints.
+-- Exceptions: snapshot_date (date-only YYYY-MM-DD), last_count_order_submitted_at (Alpaca cursor).
 
 -- Registered traders
 CREATE TABLE IF NOT EXISTS traders (
