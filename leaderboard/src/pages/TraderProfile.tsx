@@ -188,7 +188,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       {/* Metrics grid */}
       {snapshot && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
             <MetricCard
               label="ROI"
               value={formatPercent(snapshot.total_pnl_pct, 2)}
@@ -212,9 +212,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               value={formatMetric(snapshot.composite_score)}
               tooltip={METRIC_TOOLTIPS.score}
             />
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <MetricCard
               label="Win Rate"
               value={formatMetric(snapshot.win_rate, 1, "%")}
@@ -243,10 +240,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               value={String(snapshot.open_positions)}
               tooltip={METRIC_TOOLTIPS.openPositions}
             />
-          </div>
-
-          {/* Equity breakdown */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <MetricCard
               label="Equity"
               value={formatCurrency(snapshot.equity)}
