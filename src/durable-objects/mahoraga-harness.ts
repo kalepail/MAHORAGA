@@ -254,30 +254,30 @@ const SOURCE_CONFIG = {
     comments: { 200: 1.4, 100: 1.25, 50: 1.15, 20: 1.05, 0: 0.9 } as Record<number, number>,
   },
   // [TUNE] How fast old posts lose weight (minutes). Lower = faster decay.
-  decayHalfLifeMinutes: 120,
+  decayHalfLifeMinutes: 90,
 };
 
 const DEFAULT_CONFIG: AgentConfig = {
-  data_poll_interval_ms: 30_000,
-  analyst_interval_ms: 120_000,
-  max_position_value: 5000,
-  max_positions: 5,
-  min_sentiment_score: 0.3,
-  min_analyst_confidence: 0.6,
-  take_profit_pct: 10,
-  stop_loss_pct: 5,
-  position_size_pct_of_cash: 25,
+  data_poll_interval_ms: 15_000,
+  analyst_interval_ms: 60_000,
+  max_position_value: 1500,
+  max_positions: 100,
+  min_sentiment_score: 0.25,
+  min_analyst_confidence: 0.5,
+  take_profit_pct: 5,
+  stop_loss_pct: 3,
+  position_size_pct_of_cash: 3,
   stale_position_enabled: true,
-  stale_min_hold_hours: 24,
+  stale_min_hold_hours: 6,
   stale_max_hold_days: 3,
-  stale_min_gain_pct: 5,
-  stale_mid_hold_days: 2,
-  stale_mid_min_gain_pct: 3,
-  stale_social_volume_decay: 0.3,
+  stale_min_gain_pct: 3,
+  stale_mid_hold_days: 1,
+  stale_mid_min_gain_pct: 1.5,
+  stale_social_volume_decay: 0.35,
   llm_provider: "openai-raw",
   llm_model: "gpt-4o-mini",
   llm_analyst_model: "gpt-4o",
-  llm_min_hold_minutes: 30,
+  llm_min_hold_minutes: 15,
   options_enabled: false,
   options_min_confidence: 0.8,
   options_max_pct_per_trade: 0.02,
@@ -2448,7 +2448,7 @@ Provide a brief risk assessment and recommendation (HOLD, SELL, or ADD). JSON fo
       .map((a) => ({ ...a, avgSentiment: a.totalSentiment / a.count }))
       .filter((a) => a.avgSentiment >= this.state.config.min_sentiment_score * 0.5)
       .sort((a, b) => b.avgSentiment - a.avgSentiment)
-      .slice(0, 10);
+      .slice(0, 25);
 
     if (candidates.length === 0) {
       return { recommendations: [], market_summary: "No candidates above threshold", high_conviction: [] };
@@ -2484,9 +2484,9 @@ ${candidates
   )
   .join("\n")}
 
-RAW SIGNALS (top 20):
+RAW SIGNALS (top 40):
 ${signals
-  .slice(0, 20)
+  .slice(0, 40)
   .map((s) => `- ${s.symbol} (${s.source}): ${s.reason}`)
   .join("\n")}
 
@@ -2505,20 +2505,20 @@ Analyze and provide BUY/SELL/HOLD recommendations:`;
         messages: [
           {
             role: "system",
-            content: `You are a senior trading analyst AI. Make the FINAL trading decisions based on social sentiment signals.
+            content: `You are a senior trading analyst AI running a high-diversification sentiment momentum strategy with up to 100 concurrent positions. Make FINAL trading decisions based on social sentiment signals.
 
 Rules:
-- Only recommend BUY for symbols with strong conviction from multiple data points
-- Recommend SELL only for positions that have been held long enough AND show deteriorating sentiment or major red flags
-- Give positions time to develop - avoid selling too early just because gains are small
-- Positions held less than 1-2 hours should generally be given more time unless hitting stop loss
+- Recommend BUY for symbols with meaningful sentiment signal from at least one strong data point - we want to fill many positions
+- Recommend SELL for positions showing deteriorating sentiment, stale momentum, or any red flags
+- This is a fast-rotation strategy: positions held over 15 minutes are eligible for sell if thesis weakens
+- Prefer many small confident bets over few large ones - diversification is our risk management
 - Consider the QUALITY of sentiment, not just quantity
 - Output valid JSON only
 
 Response format:
 {
   "recommendations": [
-    { "action": "BUY"|"SELL"|"HOLD", "symbol": "TICKER", "confidence": 0.0-1.0, "reasoning": "detailed reasoning", "suggested_size_pct": 10-30 }
+    { "action": "BUY"|"SELL"|"HOLD", "symbol": "TICKER", "confidence": 0.0-1.0, "reasoning": "detailed reasoning", "suggested_size_pct": 1-5 }
   ],
   "market_summary": "overall market read and sentiment",
   "high_conviction_plays": ["symbols you feel strongest about"]
@@ -2526,7 +2526,7 @@ Response format:
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 800,
+        max_tokens: 2000,
         temperature: 0.4,
         response_format: { type: "json_object" },
       });
@@ -2629,7 +2629,7 @@ Response format:
         .filter((r) => !heldSymbols.has(r.symbol))
         .sort((a, b) => b.confidence - a.confidence);
 
-      for (const research of researchedBuys.slice(0, 3)) {
+      for (const research of researchedBuys.slice(0, 10)) {
         if (positions.length >= this.state.config.max_positions) break;
         if (heldSymbols.has(research.symbol)) continue;
 

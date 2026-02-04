@@ -1,18 +1,18 @@
 {
-  "data_poll_interval_ms": 30000,
-  "analyst_interval_ms": 120000,
-  
-  "max_position_value": 5000,
-  "max_positions": 5,
-  "min_sentiment_score": 0.3,
-  "min_analyst_confidence": 0.6,
-  
-  "take_profit_pct": 10,
-  "stop_loss_pct": 5,
-  "position_size_pct_of_cash": 25,
-  
+  "data_poll_interval_ms": 15000,
+  "analyst_interval_ms": 60000,
+
+  "max_position_value": 1500,
+  "max_positions": 100,
+  "min_sentiment_score": 0.25,
+  "min_analyst_confidence": 0.5,
+
+  "take_profit_pct": 5,
+  "stop_loss_pct": 3,
+  "position_size_pct_of_cash": 3,
+
   "llm_model": "gpt-4o-mini",
   "llm_analyst_model": "gpt-4o",
-  
+
   "starting_equity": 100000
 }
