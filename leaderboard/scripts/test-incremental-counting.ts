@@ -39,23 +39,21 @@ function extractSubmittedAt(o: Record<string, unknown>): string {
 }
 
 /**
- * Simulates the "back up and anchor" incremental count.
+ * Simulates the incremental count.
  * Mirrors worker/alpaca.ts fetchFilledOrderCountSince().
+ *
+ * Uses exact checkpoint timestamp (no buffer). Alpaca's `after` is inclusive,
+ * so the anchor order is returned and skipped by ID.
  */
 async function incrementalCount(
   anchorTimestamp: string,
   anchorId: string
 ): Promise<{ newFilled: number; nextTimestamp: string; nextId: string }> {
-  // Back up 1 second (safety buffer for timestamp precision)
-  const bufferedAfter = new Date(
-    new Date(anchorTimestamp).getTime() - 1000
-  ).toISOString();
-
   const params = new URLSearchParams({
     status: "closed",
     limit: "500",
     direction: "asc",
-    after: bufferedAfter,
+    after: anchorTimestamp,
   });
 
   const res = await fetch(`${BASE}/v2/orders?${params}`, { headers });
@@ -74,11 +72,14 @@ async function incrementalCount(
   for (const order of orders) {
     const orderId = order.id as string;
 
-    // Skip everything up to and including the anchor
-    if (!foundAnchor) {
-      if (orderId === anchorId) foundAnchor = true;
+    // Skip the anchor itself (already counted)
+    if (orderId === anchorId) {
+      foundAnchor = true;
       continue;
     }
+
+    // Only count orders after the anchor
+    if (!foundAnchor) continue;
 
     if (order.status === "filled") newFilled++;
     lastTimestamp = extractSubmittedAt(order);
@@ -86,7 +87,7 @@ async function incrementalCount(
   }
 
   if (!foundAnchor) {
-    console.error("  WARNING: anchor not found in buffer window");
+    console.error("  WARNING: anchor not found (would trigger full recount in production)");
   }
 
   return {

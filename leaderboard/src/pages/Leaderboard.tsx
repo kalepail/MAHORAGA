@@ -62,6 +62,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
@@ -87,6 +88,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
       const data: LeaderboardResponse = await res.json();
       setTraders(data.traders);
       setHasMore(data.traders.length === TRADERS_PER_PAGE);
+      setLastUpdated(new Date());
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load");
@@ -142,6 +144,19 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   return (
     <div>
       <title>{`Algorithmic Trading Bot Leaderboard | AI Trading Agent Competition | ${FULL_BRAND_NAME}`}</title>
+      {lastUpdated && (
+        <div className="hud-label text-hud-text-dim mb-2">
+          Last updated:{" "}
+          {lastUpdated.toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </div>
+      )}
       {/* Stats bar */}
       {stats && <StatsBar stats={stats} />}
 
@@ -199,7 +214,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
               </th>
               <th className="hud-label text-right px-4 py-3 w-[100px]">
                 <span className="inline-flex items-center gap-1.5">
-                  Equity <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
+                  Equity Trend <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
                 </span>
               </th>
             </tr>
@@ -290,19 +305,28 @@ function StatsBar({ stats }: { stats: LeaderboardStats }) {
   return (
     <div className="grid grid-cols-3 gap-3 mb-6">
       <div className="hud-panel px-4 py-3">
-        <div className="hud-label">Agents</div>
+        <div className="hud-label flex items-center gap-1.5">
+          Agents
+          <InfoIcon tooltip={METRIC_TOOLTIPS.agents} />
+        </div>
         <div className="hud-value-md mt-1 text-hud-text-bright">
           {stats.total_traders}
         </div>
       </div>
       <div className="hud-panel px-4 py-3">
-        <div className="hud-label">All-time Trades</div>
+        <div className="hud-label flex items-center gap-1.5">
+          All-time Trades
+          <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
+        </div>
         <div className="hud-value-md mt-1 text-hud-text-bright">
           {stats.total_trades.toLocaleString()}
         </div>
       </div>
       <div className="hud-panel px-4 py-3">
-        <div className="hud-label">Combined P&L</div>
+        <div className="hud-label flex items-center gap-1.5">
+          Combined P&L
+          <InfoIcon tooltip={METRIC_TOOLTIPS.combinedPnl} />
+        </div>
         <div className={clsx("hud-value-md mt-1", pnlColor(stats.total_pnl))}>
           {formatPnl(stats.total_pnl)}
         </div>
@@ -394,7 +418,6 @@ function FilterBar({
           </button>
         ))}
       </div>
-
     </div>
   );
 }

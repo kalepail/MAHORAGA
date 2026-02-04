@@ -82,8 +82,9 @@ export class SyncerDO extends DurableObject<Env> {
       // the partial count and continue from there on the next sync. This
       // ensures bounded API calls even for hyperactive traders.
       //
-      // Deduping: Uses "back up and anchor" strategy — subtract 1s from
-      // checkpoint timestamp and use order ID as the deterministic anchor.
+      // Deduping: Uses exact checkpoint timestamp + anchor order ID.
+      // Alpaca's `after` is inclusive so the anchor appears in results and
+      // is skipped by ID. If the anchor is missing, falls back to full recount.
       // ---------------------------------------------------------------
 
       let filledCount: number;
@@ -97,11 +98,10 @@ export class SyncerDO extends DurableObject<Env> {
 
       if (storedLifetimeCount !== null && storedLifetimeCount !== undefined &&
           storedLastOrderSubmittedAt !== null && storedLastOrderSubmittedAt !== undefined) {
-        // Incremental count: "back up and anchor" approach.
-        // We subtract 1s from the checkpoint timestamp (safety buffer), fetch
-        // orders from there ASC, find the anchor order by ID, and only count
-        // filled orders that come AFTER it. Fully deterministic — no timestamp
-        // precision issues, no double-counting.
+        // Incremental count: use exact checkpoint timestamp + anchor ID.
+        // Alpaca's `after` is inclusive, so the anchor order appears in results.
+        // We skip it by ID and count only genuinely new orders after it.
+        // If anchor isn't found, we fall back to a full recount.
         const incrementalResult = await fetchFilledOrderCountSince(
           accessToken,
           storedLastOrderSubmittedAt,
@@ -109,20 +109,30 @@ export class SyncerDO extends DurableObject<Env> {
           10 // Max 10 pages = 5000 new orders
         );
 
-        // Add the new count to our running total
-        filledCount = storedLifetimeCount + incrementalResult.newCount;
+        if (incrementalResult.anchorNotFound) {
+          // Anchor order vanished from Alpaca (purged, or data corruption).
+          // Fall back to a full recount to self-heal rather than freezing.
+          console.log(`[syncer] Trader ${traderId}: anchor order not found, falling back to full recount`);
+          const fullResult = await fetchTotalFilledOrderCount(accessToken);
+          filledCount = fullResult.count;
+          newLastCountOrderSubmittedAt = fullResult.newestOrderSubmittedAt;
+          newLastCountOrderId = fullResult.newestOrderId;
+        } else {
+          // Add the new count to our running total
+          filledCount = storedLifetimeCount + incrementalResult.newCount;
 
-        // Update checkpoint to where we stopped (or keep old if no new orders)
-        // Because we paginate ASC (oldest→newest), this is always safe:
-        // - If we finished: checkpoint is the newest order, we're caught up
-        // - If we hit limit: checkpoint is where we stopped, next sync continues from there
-        newLastCountOrderSubmittedAt = incrementalResult.lastProcessedOrderSubmittedAt ??
-                                       storedLastOrderSubmittedAt;
-        newLastCountOrderId = incrementalResult.lastProcessedOrderId ??
-                              storedLastOrderId ?? null;
+          // Update checkpoint to where we stopped (or keep old if no new orders)
+          // Because we paginate ASC (oldest→newest), this is always safe:
+          // - If we finished: checkpoint is the newest order, we're caught up
+          // - If we hit limit: checkpoint is where we stopped, next sync continues from there
+          newLastCountOrderSubmittedAt = incrementalResult.lastProcessedOrderSubmittedAt ??
+                                         storedLastOrderSubmittedAt;
+          newLastCountOrderId = incrementalResult.lastProcessedOrderId ??
+                                storedLastOrderId ?? null;
 
-        if (incrementalResult.hitPageLimit) {
-          console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue from checkpoint next sync`);
+          if (incrementalResult.hitPageLimit) {
+            console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue from checkpoint next sync`);
+          }
         }
       } else {
         // No stored count — do full count

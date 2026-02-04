@@ -322,6 +322,8 @@ export interface IncrementalTradeCountResult {
   lastProcessedOrderId: string | null;
   /** True if we hit the page limit. Count is still accurate for orders processed. */
   hitPageLimit: boolean;
+  /** True if the anchor order was not found. Caller should fall back to a full recount. */
+  anchorNotFound: boolean;
 }
 
 /**
@@ -330,21 +332,17 @@ export interface IncrementalTradeCountResult {
  * Used for incremental trade counting: instead of paginating through ALL orders
  * every sync, we store a running total and only count new orders since last sync.
  *
- * Strategy — "back up and anchor":
- *   1. Subtract 1 second from the stored timestamp to create a safety buffer.
- *      This ensures we never miss orders due to Alpaca's sub-millisecond
- *      timestamp precision issues or `after` param quirks.
- *   2. Fetch orders from that buffered start point (ASC, oldest → newest).
- *   3. Scan forward until we find the anchor order (by ID). Everything before
- *      and including the anchor was already counted — skip it.
- *   4. Count filled orders that come AFTER the anchor. These are genuinely new.
+ * Uses the exact checkpoint timestamp with the anchor order ID for dedup:
+ *   - Alpaca's `after` param is inclusive (returns the boundary order).
+ *   - The anchor order appears in results — we skip it by ID.
+ *   - Everything after the anchor is genuinely new.
  *
- * This is fully deterministic: the order ID is the source of truth, not
- * timestamps. No precision issues, no double-counting, no missed orders.
+ * If the anchor isn't found (order purged, or `after` behavior changes),
+ * signals `anchorNotFound` so the caller can fall back to a full recount.
  *
  * @param token - Alpaca access token
- * @param afterTimestamp - submitted_at of the last counted order (we subtract 1s for buffer)
- * @param anchorOrderId - ID of the last counted order (our dedup anchor point)
+ * @param afterTimestamp - submitted_at of the last counted order
+ * @param anchorOrderId - ID of the last counted order (dedup anchor)
  * @param maxPages - Safety limit on pagination (default 10 = 5000 orders max)
  */
 export async function fetchFilledOrderCountSince(
@@ -353,17 +351,11 @@ export async function fetchFilledOrderCountSince(
   anchorOrderId: string,
   maxPages = 10
 ): Promise<IncrementalTradeCountResult> {
-  // Back up by 1 second so timestamp precision issues can never cause us
-  // to miss orders. The anchor ID is the real boundary, not the timestamp.
-  const bufferedAfter = new Date(
-    new Date(afterTimestamp).getTime() - 1000
-  ).toISOString();
-
   let newCount = 0;
   let lastProcessedOrderSubmittedAt: string | null = null;
   let lastProcessedOrderId: string | null = null;
   let foundAnchor = false;
-  let currentAfter = bufferedAfter;
+  let currentAfter = afterTimestamp;
   let prevPageLastId: string | null = null; // for page-boundary dedup
   let pageCount = 0;
 
@@ -389,14 +381,20 @@ export async function fetchFilledOrderCountSince(
     for (const order of orders) {
       const orderId = order.id as string;
 
-      // Skip orders up to and including the anchor (already counted)
-      if (!foundAnchor) {
-        if (orderId === anchorOrderId) foundAnchor = true;
+      // Skip the anchor order itself (already counted).
+      // Because `after` is inclusive, the anchor is typically the first result.
+      if (orderId === anchorOrderId) {
+        foundAnchor = true;
         continue;
       }
 
       // Skip page-boundary order (Alpaca's `after` may re-include it)
       if (orderId === prevPageLastId) continue;
+
+      // Only count orders that appear AFTER we've seen the anchor.
+      // Orders before the anchor in the result set share the same timestamp
+      // and were already counted in the previous full/incremental count.
+      if (!foundAnchor) continue;
 
       // This is a genuinely new order
       if (order.status === "filled") newCount++;
@@ -413,17 +411,7 @@ export async function fetchFilledOrderCountSince(
   }
 
   if (!foundAnchor) {
-    // Anchor order not found in the buffer window. This should be extremely
-    // rare (would require the order to vanish or >5000 orders in 1 second).
-    // Return 0 new orders so the count doesn't inflate. The next full recount
-    // (triggered by cron or manual reset) will correct it.
-    console.error(`[alpaca] fetchFilledOrderCountSince: anchor order ${anchorOrderId} not found in buffer window, returning 0 new`);
-    return {
-      newCount: 0,
-      lastProcessedOrderSubmittedAt: null,
-      lastProcessedOrderId: null,
-      hitPageLimit: false,
-    };
+    console.error(`[alpaca] fetchFilledOrderCountSince: anchor order ${anchorOrderId} not found`);
   }
 
   return {
@@ -431,6 +419,7 @@ export async function fetchFilledOrderCountSince(
     lastProcessedOrderSubmittedAt,
     lastProcessedOrderId,
     hitPageLimit: pageCount >= maxPages,
+    anchorNotFound: !foundAnchor,
   };
 }
 

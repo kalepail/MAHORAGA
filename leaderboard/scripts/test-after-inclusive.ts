@@ -106,9 +106,9 @@ if (!res4.ok) {
 
 console.log("\n=== Summary ===");
 console.log(
-  "Alpaca's `after` param is inclusive at the boundary due to sub-millisecond"
+  "Alpaca's `after` param is inclusive at the boundary. The fix skips the"
 );
 console.log(
-  "timestamp precision truncation. The fix uses order IDs as deterministic"
+  "anchor order by ID. If `after` behavior ever changes, the syncer falls"
 );
-console.log("anchors instead of relying on timestamp exclusivity.");
+console.log("back to a full recount automatically.");

@@ -134,7 +134,14 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               {trader.last_synced_at && (
                 <span className="hud-label">
                   Last sync{" "}
-                  {new Date(trader.last_synced_at).toLocaleDateString()}
+                  {new Date(trader.last_synced_at).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
                 </span>
               )}
             </div>
@@ -221,6 +228,11 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               tooltip={METRIC_TOOLTIPS.maxDrawdown}
             />
             <MetricCard
+              label="All-time Trades"
+              value={formatMetric(snapshot.num_trades)}
+              tooltip={METRIC_TOOLTIPS.trades}
+            />
+            <MetricCard
               label="Today"
               value={formatPnl(snapshot.day_pnl)}
               positive={snapshot.day_pnl >= 0}
@@ -297,7 +309,10 @@ function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
   return (
     <div className="hud-panel">
       <div className="px-4 py-3 border-b border-hud-line">
-        <span className="hud-label">Recent Trades</span>
+        <span className="hud-label inline-flex items-center gap-1.5">
+          Recent Trades
+          <InfoIcon tooltip={METRIC_TOOLTIPS.recentTrades} />
+        </span>
         {trades.length > 0 && (
           <span className="hud-label text-hud-text-dim ml-2">({trades.length})</span>
         )}
@@ -313,9 +328,21 @@ function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
               <tr className="border-b border-hud-line">
                 <th className="hud-label text-left px-4 py-2 w-[30%]">Symbol</th>
                 <th className="hud-label text-left px-4 py-2 w-[15%]">Side</th>
-                <th className="hud-label text-right px-4 py-2 w-[20%]">Qty</th>
-                <th className="hud-label text-right px-4 py-2 w-[15%]">Price</th>
-                <th className="hud-label text-right px-4 py-2 w-[20%]">Time</th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">
+                  <span className="inline-flex items-center gap-1.5">
+                    Qty <InfoIcon tooltip={METRIC_TOOLTIPS.tradeQty} />
+                  </span>
+                </th>
+                <th className="hud-label text-right px-4 py-2 w-[15%]">
+                  <span className="inline-flex items-center gap-1.5">
+                    Price <InfoIcon tooltip={METRIC_TOOLTIPS.tradePrice} />
+                  </span>
+                </th>
+                <th className="hud-label text-right px-4 py-2 w-[20%]">
+                  <span className="inline-flex items-center gap-1.5">
+                    Time <InfoIcon tooltip={METRIC_TOOLTIPS.tradeTime} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
