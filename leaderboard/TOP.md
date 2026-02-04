@@ -1,4 +1,5 @@
 - Tapping tooltips in mobile does weird things
+- Mobile friendly review and improvements and styles from large 4k monitor down to 350px phone
 - Review logging and error reporting and ensure it's good across both stacks
 - Codex, Kimi and Claude deep research, audit and improvements after documents and cross references
 - Add a Me link where you can easily find yourself in the list

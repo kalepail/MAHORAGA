@@ -1,2 +1,1 @@
 - Audit all crons
-- Enable observability on everything
