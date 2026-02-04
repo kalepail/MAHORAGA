@@ -303,12 +303,16 @@ async function reEnqueueStaleTraders(env: Env): Promise<void> {
 async function rebuildCaches(env: Env): Promise<void> {
   await invalidateLeaderboardCaches(env);
 
+  // Record the last successful cron refresh time for UI timestamps.
+  const nowIso = new Date().toISOString();
+  await env.KV.put("leaderboard:last_updated", nowIso);
+
   // Pre-cache the default leaderboard view
   const defaultData = await queryLeaderboard(env, {
-    period: "30", sort: "composite_score", assetClass: "all",
+    sort: "composite_score", assetClass: "all",
     minTrades: 0, limit: 100, offset: 0,
   });
-  const defaultKey = leaderboardCacheKey("30", "composite_score", "all", 0);
+  const defaultKey = leaderboardCacheKey("composite_score", "all", 0);
   await setCachedLeaderboard(env, defaultKey, defaultData);
 
   // Pre-cache stats

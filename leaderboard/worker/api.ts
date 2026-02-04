@@ -57,7 +57,6 @@ async function getActiveTraderIdByUsername(
 // ---------------------------------------------------------------------------
 
 export interface LeaderboardQueryOptions {
-  period: string;
   sort: string;
   assetClass: string;
   minTrades: number;
@@ -71,7 +70,6 @@ export interface LeaderboardQueryOptions {
 
 export async function getLeaderboard(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const period = url.searchParams.get("period") || "30";
   const sort = url.searchParams.get("sort") || "composite_score";
   const assetClass = url.searchParams.get("asset_class") || "all";
   const minTrades = safeParseInt(url.searchParams.get("min_trades"), 0);
@@ -79,7 +77,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
   // Check KV cache (only for first page requests)
-  const cacheKey = leaderboardCacheKey(period, sort, assetClass, minTrades);
+  const cacheKey = leaderboardCacheKey(sort, assetClass, minTrades);
   const isFirstPage = offset === 0 && limit === 100;
 
   if (isFirstPage) {
@@ -92,7 +90,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   }
 
   const data = await queryLeaderboard(env, {
-    period, sort, assetClass, minTrades, limit, offset,
+    sort, assetClass, minTrades, limit, offset,
   });
 
   // Write-through cache for first page requests
@@ -105,7 +103,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
 }
 
 export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) {
-  const { period, sort, assetClass, minTrades, limit, offset } = opts;
+  const { sort, assetClass, minTrades, limit, offset } = opts;
 
   // Sort whitelist prevents SQL injection. Only these columns can be sorted.
   // max_drawdown_pct sorts ASC (lower = better), all others sort DESC (higher = better).
@@ -116,27 +114,14 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   const sortCol = allowedSorts.includes(sort) ? sort : "composite_score";
   const sortDir = sortCol === "max_drawdown_pct" ? "ASC" : "DESC";
 
-  // The query joins each trader with their most recent snapshot within the
-  // selected period. Note: the period filter controls DATA FRESHNESS, not
-  // the metric calculation window. A "30D" filter shows traders whose most
-  // recent snapshot falls within the last 30 days, but the metrics in that
-  // snapshot (ROI, Sharpe, etc.) reflect all-time performance up to that date.
+  // Use a CTE with window function to get each trader's latest snapshot.
+  // Single table scan + sort, rather than a subquery per trader row.
   //
   // Traders with no snapshot yet (just registered, first sync pending) are
   // included with pending_sync=1 so the UI can show a "syncing" placeholder.
   //
   // The min_trades filter (default 0) excludes traders with fewer total
   // filled orders, preventing one-shot luck from appearing on the board.
-  //
-  // Security: Compute date boundary in JS to avoid SQL string concatenation.
-  // This prevents any possibility of injection through the period parameter.
-  const periodDays = Math.max(1, Math.min(safeParseInt(period, 30), 365));
-  const dateBoundary = new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000)
-    .toISOString().split("T")[0];
-
-  // Use a CTE with window function instead of correlated subquery.
-  // This computes latest snapshot per trader in a single table scan + sort,
-  // rather than running a subquery per trader row (O(N) -> O(1)).
   let query = `
     WITH latest_snapshots AS (
       SELECT
@@ -145,7 +130,6 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
         composite_score, open_positions, snapshot_date,
         ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
       FROM performance_snapshots
-      WHERE snapshot_date >= ?1
     )
     SELECT
       t.id, t.username, t.github_repo, t.asset_class,
@@ -156,10 +140,10 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
       CASE WHEN ls.trader_id IS NULL THEN 1 ELSE 0 END as pending_sync
     FROM traders t
     LEFT JOIN latest_snapshots ls ON ls.trader_id = t.id AND ls.rn = 1
-    WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?2)
+    WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?1)
   `;
 
-  const params: (string | number)[] = [dateBoundary, minTrades];
+  const params: (string | number)[] = [minTrades];
 
   // Asset class filter: "stocks" or "crypto" also includes traders classified
   // as "both" (they trade both asset types and belong in either filtered view).
@@ -204,7 +188,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
 
   return {
     traders: tradersWithSparklines,
-    meta: { limit, offset, period, sort: sortCol },
+    meta: { limit, offset, sort: sortCol },
   };
 }
 
@@ -226,6 +210,7 @@ export async function getLeaderboardStats(env: Env): Promise<Response> {
 }
 
 export async function queryStats(env: Env) {
+  const lastUpdated = await env.KV.get("leaderboard:last_updated");
   // Note: We use SUM(num_trades) from latest snapshots rather than COUNT(*)
   // from the trades table, because the trades table only holds the most recent
   // 100 orders per trader (syncer deletes and reinserts on each sync).
@@ -257,6 +242,7 @@ export async function queryStats(env: Env) {
     total_traders: stats?.total_traders ?? 0,
     total_trades: pnlAndTrades?.total_trades ?? 0,
     total_pnl: pnlAndTrades?.total_pnl ?? 0,
+    last_updated: lastUpdated ?? null,
   };
 }
 

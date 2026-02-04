@@ -20,6 +20,11 @@ import {
 } from "./alpaca";
 import { calcSharpeRatio, calcMaxDrawdown, calcWinRate } from "./metrics";
 
+// D1 allows up to 100 statements per batch. We use 80 as a conservative
+// limit. The first batch in a delete+reinsert sequence reserves 1 slot
+// for the DELETE, leaving (D1_BATCH_SIZE - 1) slots for INSERTs.
+const D1_BATCH_SIZE = 80;
+
 export interface SyncResult {
   success: boolean;
   traderId: string;
@@ -338,6 +343,13 @@ export class SyncerDO extends DurableObject<Env> {
         ).bind(traderId, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
       );
 
+      // Record last successful API usage timestamp
+      statements.push(
+        this.env.DB.prepare(
+          `UPDATE oauth_tokens SET last_used_at = datetime('now') WHERE trader_id = ?1`
+        ).bind(traderId)
+      );
+
       await this.env.DB.batch(statements);
 
       // 3. Replace equity history with atomic delete + insert batches.
@@ -374,10 +386,11 @@ export class SyncerDO extends DurableObject<Env> {
       ).bind(traderId);
 
       if (equityInserts.length > 0) {
-        const firstBatch = [equityDeleteStmt, ...equityInserts.slice(0, 79)];
+        const firstChunk = D1_BATCH_SIZE - 1; // reserve 1 slot for DELETE
+        const firstBatch = [equityDeleteStmt, ...equityInserts.slice(0, firstChunk)];
         await this.env.DB.batch(firstBatch);
-        for (let i = 79; i < equityInserts.length; i += 80) {
-          await this.env.DB.batch(equityInserts.slice(i, i + 80));
+        for (let i = firstChunk; i < equityInserts.length; i += D1_BATCH_SIZE) {
+          await this.env.DB.batch(equityInserts.slice(i, i + D1_BATCH_SIZE));
         }
       } else {
         // No history points — just delete old data
@@ -417,20 +430,16 @@ export class SyncerDO extends DurableObject<Env> {
       ).bind(traderId);
 
       if (tradeInserts.length > 0) {
-        const firstBatch = [tradesDeleteStmt, ...tradeInserts.slice(0, 79)];
+        const firstChunk = D1_BATCH_SIZE - 1; // reserve 1 slot for DELETE
+        const firstBatch = [tradesDeleteStmt, ...tradeInserts.slice(0, firstChunk)];
         await this.env.DB.batch(firstBatch);
-        for (let i = 79; i < tradeInserts.length; i += 80) {
-          await this.env.DB.batch(tradeInserts.slice(i, i + 80));
+        for (let i = firstChunk; i < tradeInserts.length; i += D1_BATCH_SIZE) {
+          await this.env.DB.batch(tradeInserts.slice(i, i + D1_BATCH_SIZE));
         }
       } else {
         // No trades — just delete old data
         await tradesDeleteStmt.run();
       }
-
-      // 5. Update oauth_tokens last_used_at
-      await this.env.DB.prepare(
-        `UPDATE oauth_tokens SET last_used_at = datetime('now') WHERE trader_id = ?1`
-      ).bind(traderId).run();
 
       return {
         success: true,

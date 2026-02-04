@@ -4,7 +4,6 @@ import type {
   TraderRow,
   LeaderboardStats,
   LeaderboardResponse,
-  Period,
   SortField,
   AssetFilter,
 } from "../types";
@@ -18,13 +17,6 @@ import { FULL_BRAND_NAME } from "../branding";
 interface LeaderboardProps {
   navigate: (path: string) => void;
 }
-
-const PERIODS: { value: Period; label: string }[] = [
-  { value: "7", label: "7D" },
-  { value: "30", label: "30D" },
-  { value: "90", label: "90D" },
-  { value: "all", label: "ALL" },
-];
 
 const SORTS: { value: SortField; label: string }[] = [
   { value: "composite_score", label: "Score" },
@@ -52,7 +44,6 @@ const pillClass = (active: boolean) =>
   );
 
 export function Leaderboard({ navigate }: LeaderboardProps) {
-  const [period, setPeriod] = useState<Period>("30");
   const [sort, setSort] = useState<SortField>("composite_score");
   const [assetFilter, setAssetFilter] = useState<AssetFilter>("all");
   const [traders, setTraders] = useState<TraderRow[]>([]);
@@ -62,7 +53,6 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
@@ -76,7 +66,6 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
     setOffset(0);
     try {
       const params = new URLSearchParams({
-        period: period === "all" ? "9999" : period,
         sort,
         asset_class: assetFilter,
         limit: String(TRADERS_PER_PAGE),
@@ -88,14 +77,13 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
       const data: LeaderboardResponse = await res.json();
       setTraders(data.traders);
       setHasMore(data.traders.length === TRADERS_PER_PAGE);
-      setLastUpdated(new Date());
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [period, sort, assetFilter]);
+  }, [sort, assetFilter]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -103,7 +91,6 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
     const newOffset = offset + TRADERS_PER_PAGE;
     try {
       const params = new URLSearchParams({
-        period: period === "all" ? "9999" : period,
         sort,
         asset_class: assetFilter,
         limit: String(TRADERS_PER_PAGE),
@@ -144,10 +131,10 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   return (
     <div>
       <title>{`Algorithmic Trading Bot Leaderboard | AI Trading Agent Competition | ${FULL_BRAND_NAME}`}</title>
-      {lastUpdated && (
+      {stats?.last_updated && (
         <div className="hud-label text-hud-text-dim mb-2">
           Last updated:{" "}
-          {lastUpdated.toLocaleString("en-US", {
+          {new Date(stats.last_updated).toLocaleString("en-US", {
             month: "short",
             day: "numeric",
             year: "numeric",
@@ -162,10 +149,8 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
 
       {/* Filters */}
       <FilterBar
-        period={period}
         sort={sort}
         assetFilter={assetFilter}
-        onPeriodChange={setPeriod}
         onSortChange={setSort}
         onAssetFilterChange={setAssetFilter}
       />
@@ -336,41 +321,20 @@ function StatsBar({ stats }: { stats: LeaderboardStats }) {
 }
 
 interface FilterBarProps {
-  period: Period;
   sort: SortField;
   assetFilter: AssetFilter;
-  onPeriodChange: (p: Period) => void;
   onSortChange: (s: SortField) => void;
   onAssetFilterChange: (a: AssetFilter) => void;
 }
 
 function FilterBar({
-  period,
   sort,
   assetFilter,
-  onPeriodChange,
   onSortChange,
   onAssetFilterChange,
 }: FilterBarProps) {
   return (
     <div className="hud-panel px-4 py-3 mb-4 flex items-center gap-4 flex-wrap">
-      {/* Period */}
-      <div className="flex items-center gap-1">
-        <span className="hud-label mr-2">Period</span>
-        <InfoIcon tooltip={METRIC_TOOLTIPS.period} position="bottom" />
-        {PERIODS.map((p) => (
-          <button
-            key={p.value}
-            onClick={() => onPeriodChange(p.value)}
-            className={clsx(pillClass(period === p.value), "ml-1 first:ml-1")}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="w-px h-4 bg-hud-line" />
-
       {/* Sort */}
       <div className="flex items-center gap-1">
         <span className="hud-label mr-2">Sort</span>

@@ -62,7 +62,6 @@ export function mockFetch(
     const sort: SortField =
       (params.get("sort") as SortField) || "composite_score";
     const assetClass = params.get("asset_class") || "all";
-    const period = params.get("period") || "30";
 
     let traders = sortTraders(sort);
 
@@ -77,7 +76,6 @@ export function mockFetch(
       meta: {
         limit: 100,
         offset: 0,
-        period,
         sort,
       },
     };

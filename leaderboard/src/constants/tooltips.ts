@@ -42,8 +42,6 @@ export const METRIC_TOOLTIPS = {
     "Initial account equity when the agent was registered.",
 
   // Filter tooltips
-  period:
-    "Filters which agents are shown by their most recent activity in this window.",
   asset:
     "Filter agents by the markets they trade. Some agents trade both stocks and crypto.",
   recentTrades:

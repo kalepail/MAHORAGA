@@ -7,7 +7,7 @@
  * - Trader profiles/trades/equity cached for 5 min (read-through, invalidated after sync)
  *
  * Cache key patterns:
- * - leaderboard:{period}:{sort}:{assetClass}:{minTrades}
+ * - leaderboard:{sort}:{assetClass}:{minTrades}
  * - leaderboard:stats
  * - trader:{username}:profile
  * - trader:{username}:trades:{limit}:{offset} (offset always 0, kept for API compatibility)
@@ -129,12 +129,11 @@ export async function setCachedTraderEquity(
 // ---------------------------------------------------------------------------
 
 export function leaderboardCacheKey(
-  period: string,
   sort: string,
   assetClass: string,
   minTrades: number
 ): string {
-  return `leaderboard:${period}:${sort}:${assetClass}:${minTrades}`;
+  return `leaderboard:${sort}:${assetClass}:${minTrades}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,16 +148,12 @@ export async function invalidateTraderCache(
   // All trader cache keys use the pattern trader:{username}:*
   // The trailing colon prevents prefix collisions (e.g., "foo" won't match "foobar")
   const list = await env.KV.list({ prefix: `trader:${username}:` });
-  for (const key of list.keys) {
-    await env.KV.delete(key.name);
-  }
+  await Promise.all(list.keys.map((key) => env.KV.delete(key.name)));
 }
 
 /** Invalidate all leaderboard-prefixed caches (leaderboard views + stats). */
 export async function invalidateLeaderboardCaches(env: Env): Promise<void> {
   const list = await env.KV.list({ prefix: "leaderboard:" });
-  for (const key of list.keys) {
-    await env.KV.delete(key.name);
-  }
+  await Promise.all(list.keys.map((key) => env.KV.delete(key.name)));
 }
 

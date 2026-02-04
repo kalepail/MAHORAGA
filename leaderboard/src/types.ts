@@ -23,7 +23,6 @@ export interface LeaderboardResponse {
   meta: {
     limit: number;
     offset: number;
-    period: string;
     sort: string;
   };
 }
@@ -32,6 +31,7 @@ export interface LeaderboardStats {
   total_traders: number;
   total_trades: number;
   total_pnl: number;
+  last_updated: string | null;
 }
 
 export interface TraderProfile {
@@ -79,7 +79,6 @@ export interface EquityPoint {
   profit_loss_pct: number;
 }
 
-export type Period = "7" | "30" | "90" | "all";
 export type SortField =
   | "composite_score"
   | "total_pnl_pct"
