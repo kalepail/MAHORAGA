@@ -1,5 +1,6 @@
 {
-  "name": "mahoraga",
+  "name": "mahoraga-docs",
+  "account_id": "dfd716443bca4859850dd27a6f885a60",
   "compatibility_date": "2024-12-01",
   "assets": {
     "directory": "."
