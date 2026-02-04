@@ -1,0 +1,2 @@
+- Robinbood snacks, likely there are many such resources to help find symbols to watch
+- Call Parellel and Perplexity occassional as well
