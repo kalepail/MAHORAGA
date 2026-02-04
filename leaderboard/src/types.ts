@@ -24,6 +24,7 @@ export interface LeaderboardResponse {
     limit: number;
     offset: number;
     sort: string;
+    sort_dir: string;
   };
 }
 
@@ -87,4 +88,4 @@ export type SortField =
   | "win_rate"
   | "max_drawdown_pct"
   | "num_trades";
-export type AssetFilter = "all" | "stocks" | "crypto" | "both";
+export type SortDir = "asc" | "desc";

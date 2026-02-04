@@ -171,7 +171,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
       {equityCurve.length > 1 && (
         <div className="hud-panel p-4 mb-4">
           <div className="hud-label mb-2 flex items-center gap-1.5">
-            Equity Curve (90D)
+            Equity Curve
             <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
           </div>
           <div className="w-full overflow-hidden">
@@ -225,7 +225,7 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               tooltip={METRIC_TOOLTIPS.maxDrawdown}
             />
             <MetricCard
-              label="All-time Trades"
+              label="Trades"
               value={formatMetric(snapshot.num_trades)}
               tooltip={METRIC_TOOLTIPS.trades}
             />

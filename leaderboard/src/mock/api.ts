@@ -1,4 +1,4 @@
-import type { LeaderboardResponse, SortField } from "../types";
+import type { LeaderboardResponse, SortField, SortDir } from "../types";
 import {
   mockTraders,
   mockProfiles,
@@ -13,14 +13,13 @@ import {
 
 type NumericKey = "composite_score" | "total_pnl_pct" | "total_pnl" | "sharpe_ratio" | "win_rate" | "max_drawdown_pct" | "num_trades";
 
-function sortTraders(sort: string) {
+function sortTraders(sort: string, dir: SortDir = "desc") {
   const field = sort as NumericKey;
   const copy = [...mockTraders];
   copy.sort((a, b) => {
     const av = a[field] ?? -Infinity;
     const bv = b[field] ?? -Infinity;
-    // max_drawdown_pct: lower is better
-    if (field === "max_drawdown_pct") return (av as number) - (bv as number);
+    if (dir === "asc") return (av as number) - (bv as number);
     return (bv as number) - (av as number);
   });
   return copy;
@@ -61,15 +60,10 @@ export function mockFetch(
   if (method === "GET" && path === "/api/leaderboard") {
     const sort: SortField =
       (params.get("sort") as SortField) || "composite_score";
-    const assetClass = params.get("asset_class") || "all";
+    const sortDir: SortDir =
+      (params.get("sort_dir") as SortDir) || "desc";
 
-    let traders = sortTraders(sort);
-
-    if (assetClass !== "all") {
-      traders = traders.filter(
-        (t) => t.asset_class === assetClass || t.asset_class === "both"
-      );
-    }
+    const traders = sortTraders(sort, sortDir);
 
     const response: LeaderboardResponse = {
       traders,
@@ -77,6 +71,7 @@ export function mockFetch(
         limit: 100,
         offset: 0,
         sort,
+        sort_dir: sortDir,
       },
     };
     return jsonResponse(response);

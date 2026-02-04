@@ -7,7 +7,7 @@
  * - Trader profiles/trades/equity cached for 5 min (read-through, invalidated after sync)
  *
  * Cache key patterns:
- * - leaderboard:{sort}:{assetClass}:{minTrades}
+ * - leaderboard:{sort}:{sortDir}:{minTrades}
  * - leaderboard:stats
  * - trader:{username}:profile
  * - trader:{username}:trades:{limit}:{offset} (offset always 0, kept for API compatibility)
@@ -130,10 +130,10 @@ export async function setCachedTraderEquity(
 
 export function leaderboardCacheKey(
   sort: string,
-  assetClass: string,
+  sortDir: string,
   minTrades: number
 ): string {
-  return `leaderboard:${sort}:${assetClass}:${minTrades}`;
+  return `leaderboard:${sort}:${sortDir}:${minTrades}`;
 }
 
 // ---------------------------------------------------------------------------

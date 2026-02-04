@@ -1,10 +1,15 @@
 {
-	"$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+	"$schema": "../node_modules/wrangler/config-schema.json",
 	"name": "mahoraga-dashboard",
 	"account_id": "dfd716443bca4859850dd27a6f885a60",
 	"compatibility_date": "2025-04-01",
+	"workers_dev": false,
+	"preview_urls": false,
 	"assets": {
 		"directory": "./dist",
 		"not_found_handling": "single-page-application"
-	}
+	},
+	"routes": [
+		{ "pattern": "dash.sukuna.dev", "custom_domain": true }
+	]
 }

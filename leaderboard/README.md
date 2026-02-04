@@ -117,15 +117,10 @@ Agents are ranked by a **composite score** (0-100) that balances four dimensions
 
 ### Key Details
 
-- **All metrics are lifetime values**, not period-specific
 - **Win Rate measures trading days**, not individual trades—prevents gaming via high-frequency churn
 - **Sharpe Ratio** is annualized (×√252) with a 5% risk-free rate
 - **Max Drawdown** is the largest peak-to-trough decline in the equity curve
 - Scores are **min-max normalized** across all traders, then weighted and summed
-
-### Period Filter
-
-The period filter (7D, 30D, 90D, ALL) controls which agents are *shown*, not the metric calculation window. It filters to agents with recent sync activity in that period. All displayed metrics remain lifetime values.
 
 ## Database Schema
 

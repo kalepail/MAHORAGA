@@ -5,47 +5,97 @@ import type {
   LeaderboardStats,
   LeaderboardResponse,
   SortField,
-  AssetFilter,
+  SortDir,
 } from "../types";
 import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
 import { InfoIcon } from "../components/Tooltip";
 import { pnlColor, formatPercent, formatPnl, formatMetric } from "../utils";
-import { METRIC_TOOLTIPS, SORT_TOOLTIPS, SORT_LABELS } from "../constants/tooltips";
+import { METRIC_TOOLTIPS, SORT_TOOLTIPS } from "../constants/tooltips";
 import { FULL_BRAND_NAME } from "../branding";
 
 interface LeaderboardProps {
   navigate: (path: string) => void;
 }
 
-const SORTS: { value: SortField; label: string }[] = [
-  { value: "composite_score", label: "Score" },
-  { value: "total_pnl_pct", label: "ROI %" },
-  { value: "total_pnl", label: "P&L" },
-  { value: "sharpe_ratio", label: "Sharpe" },
-  { value: "win_rate", label: "Win Rate" },
-  { value: "max_drawdown_pct", label: "Drawdown" },
-  { value: "num_trades", label: "All-time Trades" },
-];
-
-const ASSET_FILTERS: { value: AssetFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "stocks", label: "Stocks" },
-  { value: "crypto", label: "Crypto" },
-];
+/** Natural (first-click) direction for each column. MDD is ASC (lower = better). */
+const NATURAL_DIR: Record<SortField, SortDir> = {
+  composite_score: "desc",
+  total_pnl_pct: "desc",
+  total_pnl: "desc",
+  sharpe_ratio: "desc",
+  win_rate: "desc",
+  max_drawdown_pct: "asc",
+  num_trades: "desc",
+};
 
 const TRADERS_PER_PAGE = 100;
 
-/** Shared style for pill-style toggle buttons in the filter bar. */
-const pillClass = (active: boolean) =>
-  clsx(
-    "bg-transparent border-none font-mono text-[11px] uppercase tracking-[0.1em] px-2 py-1 cursor-pointer transition-colors",
-    active ? "text-hud-text-bright" : "text-hud-text-dim hover:text-hud-text"
+// ---------------------------------------------------------------------------
+// Sort Arrow SVG
+// ---------------------------------------------------------------------------
+
+function SortArrow({ dir }: { dir: SortDir }) {
+  return (
+    <svg
+      width="8"
+      height="10"
+      viewBox="0 0 8 10"
+      fill="currentColor"
+      className="inline-block ml-1 opacity-80"
+    >
+      {dir === "asc" ? (
+        <path d="M4 0L8 6H0L4 0Z" />
+      ) : (
+        <path d="M4 10L0 4H8L4 10Z" />
+      )}
+    </svg>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Sortable Header
+// ---------------------------------------------------------------------------
+
+interface SortableHeaderProps {
+  label: string;
+  field: SortField;
+  tooltip: React.ReactNode;
+  activeSort: SortField;
+  activeDir: SortDir;
+  onSort: (field: SortField) => void;
+}
+
+function SortableHeader({
+  label,
+  field,
+  tooltip,
+  activeSort,
+  activeDir,
+  onSort,
+}: SortableHeaderProps) {
+  const isActive = activeSort === field;
+  return (
+    <th
+      className="hud-label text-right px-4 py-3 cursor-pointer select-none hover:text-hud-text-bright transition-colors"
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        {label}
+        {isActive && <SortArrow dir={activeDir} />}
+        <InfoIcon tooltip={tooltip} />
+      </span>
+    </th>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
+// ---------------------------------------------------------------------------
 
 export function Leaderboard({ navigate }: LeaderboardProps) {
   const [sort, setSort] = useState<SortField>("composite_score");
-  const [assetFilter, setAssetFilter] = useState<AssetFilter>("all");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [traders, setTraders] = useState<TraderRow[]>([]);
   const [stats, setStats] = useState<LeaderboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +104,30 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  /**
+   * Sort toggle cycle:
+   * 1st click on a column → natural direction (DESC for most, ASC for MDD)
+   * 2nd click on same column → opposite direction
+   * 3rd click on same column → reset to default (composite_score DESC)
+   */
+  const handleColumnSort = useCallback(
+    (field: SortField) => {
+      if (sort !== field) {
+        // Clicking a new column: set to its natural direction
+        setSort(field);
+        setSortDir(NATURAL_DIR[field]);
+      } else if (sortDir === NATURAL_DIR[field]) {
+        // Same column, currently natural: flip direction
+        setSortDir(NATURAL_DIR[field] === "desc" ? "asc" : "desc");
+      } else {
+        // Same column, already flipped: reset to default
+        setSort("composite_score");
+        setSortDir("desc");
+      }
+    },
+    [sort, sortDir]
+  );
 
   const fetchLeaderboard = useCallback(async () => {
     // Cancel any in-flight request
@@ -67,7 +141,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
     try {
       const params = new URLSearchParams({
         sort,
-        asset_class: assetFilter,
+        sort_dir: sortDir,
         limit: String(TRADERS_PER_PAGE),
       });
       const res = await fetch(`/api/leaderboard?${params}`, {
@@ -83,7 +157,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
     } finally {
       setLoading(false);
     }
-  }, [sort, assetFilter]);
+  }, [sort, sortDir]);
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -92,7 +166,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
     try {
       const params = new URLSearchParams({
         sort,
-        asset_class: assetFilter,
+        sort_dir: sortDir,
         limit: String(TRADERS_PER_PAGE),
         offset: String(newOffset),
       });
@@ -147,56 +221,25 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
       {/* Stats bar */}
       {stats && <StatsBar stats={stats} />}
 
-      {/* Filters */}
-      <FilterBar
-        sort={sort}
-        assetFilter={assetFilter}
-        onSortChange={setSort}
-        onAssetFilterChange={setAssetFilter}
-      />
-
       {/* Table */}
       <div className="hud-panel overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-hud-line">
               <th className="hud-label text-left px-4 py-3 w-[50px]">#</th>
-              <th className="hud-label text-left px-4 py-3">Agent</th>
-              <th className="hud-label text-right px-4 py-3">
+              <th className="hud-label text-left px-4 py-3">
                 <span className="inline-flex items-center gap-1.5">
-                  Score <InfoIcon tooltip={METRIC_TOOLTIPS.score} />
+                  Agent
+                  <InfoIcon tooltip={METRIC_TOOLTIPS.agentBadge} />
                 </span>
               </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  ROI % <InfoIcon tooltip={METRIC_TOOLTIPS.roi} />
-                </span>
-              </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  P&L <InfoIcon tooltip={METRIC_TOOLTIPS.pnl} />
-                </span>
-              </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  Sharpe <InfoIcon tooltip={METRIC_TOOLTIPS.sharpe} />
-                </span>
-              </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  Win Rate <InfoIcon tooltip={METRIC_TOOLTIPS.winRate} />
-                </span>
-              </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  MDD <InfoIcon tooltip={METRIC_TOOLTIPS.maxDrawdown} />
-                </span>
-              </th>
-              <th className="hud-label text-right px-4 py-3">
-                <span className="inline-flex items-center gap-1.5">
-                  All-time Trades <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
-                </span>
-              </th>
+              <SortableHeader label="Score" field="composite_score" tooltip={SORT_TOOLTIPS.composite_score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="P&L" field="total_pnl" tooltip={SORT_TOOLTIPS.total_pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={SORT_TOOLTIPS.sharpe_ratio} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="Win Rate" field="win_rate" tooltip={SORT_TOOLTIPS.win_rate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={SORT_TOOLTIPS.max_drawdown_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="Trades" field="num_trades" tooltip={SORT_TOOLTIPS.num_trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
               <th className="hud-label text-right px-4 py-3 w-[100px]">
                 <span className="inline-flex items-center gap-1.5">
                   Equity Trend <InfoIcon tooltip={METRIC_TOOLTIPS.equityCurve} />
@@ -300,7 +343,7 @@ function StatsBar({ stats }: { stats: LeaderboardStats }) {
       </div>
       <div className="hud-panel px-4 py-3">
         <div className="hud-label flex items-center gap-1.5">
-          All-time Trades
+          Trades
           <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
         </div>
         <div className="hud-value-md mt-1 text-hud-text-bright">
@@ -315,72 +358,6 @@ function StatsBar({ stats }: { stats: LeaderboardStats }) {
         <div className={clsx("hud-value-md mt-1", pnlColor(stats.total_pnl))}>
           {formatPnl(stats.total_pnl)}
         </div>
-      </div>
-    </div>
-  );
-}
-
-interface FilterBarProps {
-  sort: SortField;
-  assetFilter: AssetFilter;
-  onSortChange: (s: SortField) => void;
-  onAssetFilterChange: (a: AssetFilter) => void;
-}
-
-function FilterBar({
-  sort,
-  assetFilter,
-  onSortChange,
-  onAssetFilterChange,
-}: FilterBarProps) {
-  return (
-    <div className="hud-panel px-4 py-3 mb-4 flex items-center gap-4 flex-wrap">
-      {/* Sort */}
-      <div className="flex items-center gap-1">
-        <span className="hud-label mr-2">Sort</span>
-        <InfoIcon
-          tooltip={
-            <div>
-              <div className="text-hud-text-bright mb-2">Ranking Metrics</div>
-              {SORTS.map((s) => (
-                <div key={s.value} className="mb-2 last:mb-0">
-                  <span className="text-hud-text-bright">{SORT_LABELS[s.value]}:</span>{" "}
-                  <span className="text-hud-text-dim">{SORT_TOOLTIPS[s.value]}</span>
-                </div>
-              ))}
-            </div>
-          }
-          position="bottom"
-          maxWidth={340}
-        />
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as SortField)}
-          className="hud-input text-[11px] py-1 ml-1"
-        >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="w-px h-4 bg-hud-line" />
-
-      {/* Asset class */}
-      <div className="flex items-center gap-1">
-        <span className="hud-label mr-2">Asset</span>
-        <InfoIcon tooltip={METRIC_TOOLTIPS.asset} position="bottom" />
-        {ASSET_FILTERS.map((a) => (
-          <button
-            key={a.value}
-            onClick={() => onAssetFilterChange(a.value)}
-            className={clsx(pillClass(assetFilter === a.value), "ml-1 first:ml-1")}
-          >
-            {a.label}
-          </button>
-        ))}
       </div>
     </div>
   );

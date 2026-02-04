@@ -8,7 +8,7 @@
  * 5. Rebuild KV caches (leaderboard + stats)
  */
 
-import { tierDelaySeconds, type SyncTier } from "./tiers";
+import { tierDelaySeconds, tierStaleThresholdSeconds, type SyncTier } from "./tiers";
 import {
   setCachedLeaderboard,
   setCachedStats,
@@ -17,6 +17,11 @@ import {
 } from "./cache";
 import { queryLeaderboard, queryStats } from "./api";
 import type { SyncMessage, StaleTraderRow, ScoreRangesRow } from "./types";
+
+/** Format a JS Date to match SQLite's datetime() output: "YYYY-MM-DD HH:MM:SS". */
+function sqliteDatetime(date: Date): string {
+  return date.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+}
 
 export async function runCronCycle(env: Env): Promise<void> {
   console.log("[cron] Starting cycle");
@@ -274,20 +279,56 @@ async function assignSyncTiers(env: Env): Promise<void> {
 }
 
 /**
- * Safety net: re-enqueue any trader that hasn't been synced in 24h.
- * Limits to 100 per cycle to avoid queue burst.
+ * Safety net: re-enqueue active traders whose last sync is older than their
+ * tier-appropriate staleness threshold.
+ *
+ * Tier-aware thresholds (vs. the old flat 24h):
+ *   Tier 1 (1min sync):  stale after 10 min
+ *   Tier 2 (5min sync):  stale after 30 min
+ *   Tier 3 (15min sync): stale after 1 hour
+ *   Tier 4 (30min sync): stale after 2 hours
+ *   Tier 5 (6hr sync):   stale after 24 hours
+ *
+ * Ordered by tier ASC so high-priority traders recover first when the limit
+ * is hit. Limit raised to 500 to recover faster from mass failures.
  */
 async function reEnqueueStaleTraders(env: Env): Promise<void> {
+  // Compute per-tier cutoff timestamps in JS, formatted to match SQLite's
+  // datetime() output ("YYYY-MM-DD HH:MM:SS") so string comparisons are correct.
+  // last_synced_at is written by syncer.ts using datetime('now') which produces
+  // this exact format — using JS ISO format ("...T...Z") would break comparisons.
+  const now = Date.now();
+  const cutoff1 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(1) * 1000));
+  const cutoff2 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(2) * 1000));
+  const cutoff3 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(3) * 1000));
+  const cutoff4 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(4) * 1000));
+  const cutoff5 = sqliteDatetime(new Date(now - tierStaleThresholdSeconds(5) * 1000));
+
   const stale = await env.DB.prepare(`
     SELECT t.id, t.sync_tier
     FROM traders t
     INNER JOIN oauth_tokens ot ON ot.trader_id = t.id
     WHERE t.is_active = 1
-      AND (t.last_synced_at IS NULL OR t.last_synced_at < datetime('now', '-24 hours'))
-    LIMIT 100
-  `).all<StaleTraderRow>();
+      AND (
+        t.last_synced_at IS NULL
+        OR (t.sync_tier = 1 AND t.last_synced_at < ?1)
+        OR (t.sync_tier = 2 AND t.last_synced_at < ?2)
+        OR (t.sync_tier = 3 AND t.last_synced_at < ?3)
+        OR (t.sync_tier = 4 AND t.last_synced_at < ?4)
+        OR (t.sync_tier = 5 AND t.last_synced_at < ?5)
+      )
+    ORDER BY t.sync_tier ASC
+    LIMIT 500
+  `).bind(cutoff1, cutoff2, cutoff3, cutoff4, cutoff5)
+    .all<StaleTraderRow>();
 
   if (stale.results.length === 0) return;
+
+  // Log breakdown by tier for observability
+  const byTier = new Map<number, number>();
+  for (const row of stale.results) {
+    byTier.set(row.sync_tier, (byTier.get(row.sync_tier) ?? 0) + 1);
+  }
 
   for (const row of stale.results) {
     const tier = row.sync_tier as SyncTier;
@@ -297,7 +338,11 @@ async function reEnqueueStaleTraders(env: Env): Promise<void> {
     );
   }
 
-  console.log(`[cron] Re-enqueued ${stale.results.length} stale traders`);
+  const tierBreakdown = [...byTier.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([t, n]) => `T${t}=${n}`)
+    .join(", ");
+  console.log(`[cron] Re-enqueued ${stale.results.length} stale traders (${tierBreakdown})`);
 }
 
 async function rebuildCaches(env: Env): Promise<void> {
@@ -309,10 +354,10 @@ async function rebuildCaches(env: Env): Promise<void> {
 
   // Pre-cache the default leaderboard view
   const defaultData = await queryLeaderboard(env, {
-    sort: "composite_score", assetClass: "all",
+    sort: "composite_score", sortDir: "desc",
     minTrades: 0, limit: 100, offset: 0,
   });
-  const defaultKey = leaderboardCacheKey("composite_score", "all", 0);
+  const defaultKey = leaderboardCacheKey("composite_score", "desc", 0);
   await setCachedLeaderboard(env, defaultKey, defaultData);
 
   // Pre-cache stats

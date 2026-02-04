@@ -58,7 +58,7 @@ async function getActiveTraderIdByUsername(
 
 export interface LeaderboardQueryOptions {
   sort: string;
-  assetClass: string;
+  sortDir: string;
   minTrades: number;
   limit: number;
   offset: number;
@@ -71,13 +71,13 @@ export interface LeaderboardQueryOptions {
 export async function getLeaderboard(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sort = url.searchParams.get("sort") || "composite_score";
-  const assetClass = url.searchParams.get("asset_class") || "all";
+  const sortDir = url.searchParams.get("sort_dir") || "desc";
   const minTrades = safeParseInt(url.searchParams.get("min_trades"), 0);
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 100), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
   // Check KV cache (only for first page requests)
-  const cacheKey = leaderboardCacheKey(sort, assetClass, minTrades);
+  const cacheKey = leaderboardCacheKey(sort, sortDir, minTrades);
   const isFirstPage = offset === 0 && limit === 100;
 
   if (isFirstPage) {
@@ -90,7 +90,7 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   }
 
   const data = await queryLeaderboard(env, {
-    sort, assetClass, minTrades, limit, offset,
+    sort, sortDir, minTrades, limit, offset,
   });
 
   // Write-through cache for first page requests
@@ -103,16 +103,20 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
 }
 
 export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) {
-  const { sort, assetClass, minTrades, limit, offset } = opts;
+  const { sort, sortDir: rawSortDir, minTrades, limit, offset } = opts;
 
   // Sort whitelist prevents SQL injection. Only these columns can be sorted.
-  // max_drawdown_pct sorts ASC (lower = better), all others sort DESC (higher = better).
   const allowedSorts = [
     "composite_score", "total_pnl_pct", "total_pnl",
     "sharpe_ratio", "win_rate", "max_drawdown_pct", "num_trades",
   ];
   const sortCol = allowedSorts.includes(sort) ? sort : "composite_score";
-  const sortDir = sortCol === "max_drawdown_pct" ? "ASC" : "DESC";
+
+  // Direction whitelist prevents SQL injection.
+  const allowedDirs = ["asc", "desc"] as const;
+  const sortDir = allowedDirs.includes(rawSortDir.toLowerCase() as typeof allowedDirs[number])
+    ? rawSortDir.toUpperCase()
+    : "DESC";
 
   // Use a CTE with window function to get each trader's latest snapshot.
   // Single table scan + sort, rather than a subquery per trader row.
@@ -122,7 +126,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
   //
   // The min_trades filter (default 0) excludes traders with fewer total
   // filled orders, preventing one-shot luck from appearing on the board.
-  let query = `
+  const query = `
     WITH latest_snapshots AS (
       SELECT
         trader_id, equity, total_pnl, total_pnl_pct, total_deposits,
@@ -141,28 +145,12 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
     FROM traders t
     LEFT JOIN latest_snapshots ls ON ls.trader_id = t.id AND ls.rn = 1
     WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?1)
+    ORDER BY ${sortDir === "ASC" ? `COALESCE(ls.${sortCol}, 999)` : `COALESCE(ls.${sortCol}, -999999)`} ${sortDir},
+      ${sortCol === "total_pnl_pct" ? "COALESCE(ls.num_trades, 0) DESC" : "COALESCE(ls.total_pnl_pct, -999999) DESC"}
+    LIMIT ?2 OFFSET ?3
   `;
 
-  const params: (string | number)[] = [minTrades];
-
-  // Asset class filter: "stocks" or "crypto" also includes traders classified
-  // as "both" (they trade both asset types and belong in either filtered view).
-  if (assetClass !== "all") {
-    query += ` AND (t.asset_class = ?${params.length + 1} OR t.asset_class = 'both')`;
-    params.push(assetClass);
-  }
-  // Use COALESCE to handle NULL scores - treat NULL as -infinity for DESC sorts.
-  // This ensures traders with no composite score yet are ranked by their ROI.
-  // Secondary sort by total_pnl_pct ensures sensible ordering when primary sort values are equal.
-  const primaryExpr = sortCol === "max_drawdown_pct"
-    ? `COALESCE(ls.${sortCol}, 999)`  // ASC: NULL = worst (high drawdown)
-    : `COALESCE(ls.${sortCol}, -999999)`;  // DESC: NULL = worst (negative)
-  const secondarySort = sortCol === "total_pnl_pct"
-    ? "COALESCE(ls.num_trades, 0) DESC"
-    : "COALESCE(ls.total_pnl_pct, -999999) DESC";
-  query += ` ORDER BY ${primaryExpr} ${sortDir}, ${secondarySort}`;
-  query += ` LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`;
-  params.push(limit, offset);
+  const params: (string | number)[] = [minTrades, limit, offset];
 
   const result = await env.DB.prepare(query).bind(...params).all();
 
@@ -188,7 +176,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
 
   return {
     traders: tradersWithSparklines,
-    meta: { limit, offset, sort: sortCol },
+    meta: { limit, offset, sort: sortCol, sort_dir: sortDir.toLowerCase() },
   };
 }
 
