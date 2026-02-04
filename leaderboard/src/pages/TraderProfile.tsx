@@ -179,7 +179,6 @@ export function TraderProfile({ username, navigate }: TraderProfileProps) {
               data={equityCurve}
               width="100%"
               height={80}
-              positive={snapshot ? snapshot.total_pnl_pct >= 0 : true}
             />
           </div>
         </div>

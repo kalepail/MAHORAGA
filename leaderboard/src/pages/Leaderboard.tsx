@@ -11,7 +11,7 @@ import { AssetBadge } from "../components/AssetBadge";
 import { Sparkline } from "../components/Sparkline";
 import { InfoIcon } from "../components/Tooltip";
 import { pnlColor, formatPercent, formatPnl, formatMetric } from "../utils";
-import { METRIC_TOOLTIPS, SORT_TOOLTIPS } from "../constants/tooltips";
+import { METRIC_TOOLTIPS } from "../constants/tooltips";
 import { FULL_BRAND_NAME } from "../branding";
 
 interface LeaderboardProps {
@@ -268,13 +268,13 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
                   <InfoIcon tooltip={METRIC_TOOLTIPS.agentBadge} />
                 </span>
               </th>
-              <SortableHeader label="Score" field="composite_score" tooltip={SORT_TOOLTIPS.composite_score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="P&L" field="total_pnl" tooltip={SORT_TOOLTIPS.total_pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={SORT_TOOLTIPS.sharpe_ratio} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="Win Rate" field="win_rate" tooltip={SORT_TOOLTIPS.win_rate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={SORT_TOOLTIPS.max_drawdown_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
-              <SortableHeader label="Trades" field="num_trades" tooltip={SORT_TOOLTIPS.num_trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Score" field="composite_score" tooltip={METRIC_TOOLTIPS.score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="P&L" field="total_pnl" tooltip={METRIC_TOOLTIPS.pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={METRIC_TOOLTIPS.roi} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={METRIC_TOOLTIPS.sharpe} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Win Rate" field="win_rate" tooltip={METRIC_TOOLTIPS.winRate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={METRIC_TOOLTIPS.maxDrawdown} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Trades" field="num_trades" tooltip={METRIC_TOOLTIPS.trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
               <th className="hud-label text-right px-4 py-3 whitespace-nowrap w-[100px]">
                 <span className="inline-flex items-center gap-1.5">
                   Equity Trend
@@ -512,7 +512,6 @@ function LeaderboardRow({ trader, rank, isOdd, onClick }: LeaderboardRowProps) {
             <Sparkline
               data={trader.sparkline}
               width="100%"
-              positive={(trader.total_pnl_pct ?? 0) >= 0}
             />
           </td>
         </>

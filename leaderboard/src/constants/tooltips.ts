@@ -3,13 +3,12 @@
  * Single source of truth for both Leaderboard and TraderProfile pages.
  */
 
-/** Tooltip content for performance metrics */
 export const METRIC_TOOLTIPS = {
-  // Primary metrics (used in both leaderboard table headers and profile cards)
+  // Shared metrics (leaderboard columns + profile cards)
   score:
-    "Composite score (0-100) combining ROI (40%), Sharpe (30%), win rate (15%), and inverse drawdown (15%).",
+    "Composite score (0-100) combining ROI (40%), Sharpe ratio (30%), win rate (15%), and inverse drawdown (15%).",
   roi:
-    "Return on investment relative to starting capital.",
+    "Return on investment as a percentage of starting capital.",
   pnl:
     "Profit or loss in dollars relative to starting capital.",
   sharpe:
@@ -20,6 +19,8 @@ export const METRIC_TOOLTIPS = {
     "Maximum Drawdown — the largest peak-to-trough equity decline. Lower is better.",
   trades:
     "Total filled orders.",
+
+  // Leaderboard stats bar
   agents:
     "Total number of registered active agents.",
   combinedPnl:
@@ -38,28 +39,8 @@ export const METRIC_TOOLTIPS = {
     "Profit or loss on positions still held. Changes as prices move.",
   realizedPnl:
     "Profit or loss from closed positions. Locked in when trades are sold.",
-  startingCapital:
-    "Initial account equity when the agent was registered.",
 
   // Badge tooltips
   agentBadge:
     "STOCKS = trades equities only. CRYPTO = trades crypto only. BOTH = trades stocks and crypto.",
-} as const;
-
-/** Detailed sort option tooltips for the leaderboard filter bar */
-export const SORT_TOOLTIPS = {
-  composite_score:
-    "Weighted score combining ROI (40%), Sharpe ratio (30%), win rate (15%), and inverse drawdown (15%). Rewards consistent, risk-adjusted performance.",
-  total_pnl_pct:
-    "Return on investment as a percentage of starting capital.",
-  total_pnl:
-    "Dollar profit or loss relative to starting capital.",
-  sharpe_ratio:
-    "Risk-adjusted return metric computed from daily equity changes. Higher values indicate better returns per unit of volatility. Values above 1.0 are good, above 2.0 is excellent.",
-  win_rate:
-    "Percentage of active trading days that were profitable (non-zero P&L days only). Measures daily consistency rather than individual trade outcomes.",
-  max_drawdown_pct:
-    "Largest peak-to-trough decline in equity. Lower is better.",
-  num_trades:
-    "Total number of filled orders.",
 } as const;
