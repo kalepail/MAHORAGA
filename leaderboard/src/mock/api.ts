@@ -13,17 +13,57 @@ import {
 
 type NumericKey = "composite_score" | "total_pnl_pct" | "total_pnl" | "sharpe_ratio" | "win_rate" | "max_drawdown_pct" | "num_trades";
 
+// Tiebreaker cascade matching the backend ORDER BY.
+// Traders with pending_sync always sort last. Then cascading column tiebreakers.
+const TIEBREAKER_CASCADE: [NumericKey, SortDir][] = [
+  ["composite_score", "desc"],
+  ["total_pnl", "desc"],
+  ["total_pnl_pct", "desc"],
+  ["sharpe_ratio", "desc"],
+  ["win_rate", "desc"],
+  ["max_drawdown_pct", "asc"],
+  ["num_trades", "desc"],
+];
+
+/** Compare two numbers using relational ops (safe for all values, avoids subtraction edge cases). */
+function cmp(a: number, b: number, dir: SortDir): number {
+  if (a < b) return dir === "asc" ? -1 : 1;
+  if (a > b) return dir === "asc" ? 1 : -1;
+  return 0;
+}
+
 function sortTraders(sort: string, dir: SortDir = "desc") {
   const field = sort as NumericKey;
   const copy = [...mockTraders];
-  // Match backend COALESCE behavior: NULLs always sort last regardless of direction
-  const nullSentinel = dir === "asc" ? Infinity : -Infinity;
+  // Match backend COALESCE sentinels: NULLs always sort last
+  const sentinel = dir === "asc" ? 999999999 : -999999;
+
   copy.sort((a, b) => {
-    const av = a[field] ?? nullSentinel;
-    const bv = b[field] ?? nullSentinel;
-    if (dir === "asc") return (av as number) - (bv as number);
-    return (bv as number) - (av as number);
+    // Primary sort
+    const av = (a[field] ?? sentinel) as number;
+    const bv = (b[field] ?? sentinel) as number;
+    const primary = cmp(av, bv, dir);
+    if (primary !== 0) return primary;
+
+    // Pending-sync traders (no data at all) always sort last
+    const pa = a.pending_sync ? 1 : 0;
+    const pb = b.pending_sync ? 1 : 0;
+    if (pa !== pb) return pa - pb;
+
+    // Cascading tiebreakers (skip the primary column)
+    for (const [tieField, tieDir] of TIEBREAKER_CASCADE) {
+      if (tieField === field) continue;
+      const tieSentinel = tieDir === "asc" ? 999999999 : -999999;
+      const ta = (a[tieField] ?? tieSentinel) as number;
+      const tb = (b[tieField] ?? tieSentinel) as number;
+      const diff = cmp(ta, tb, tieDir);
+      if (diff !== 0) return diff;
+    }
+
+    // Final deterministic tiebreaker (matches backend t.id ASC)
+    return a.username.localeCompare(b.username);
   });
+
   return copy;
 }
 

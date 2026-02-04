@@ -265,6 +265,7 @@ async function assignSyncTiers(env: Env): Promise<void> {
         ROW_NUMBER() OVER (
           ORDER BY
             COALESCE(ls.composite_score, -999999) DESC,
+            CASE WHEN ls.trader_id IS NULL THEN 1 ELSE 0 END ASC,
             COALESCE(ls.total_pnl, -999999) DESC,
             COALESCE(ls.total_pnl_pct, -999999) DESC,
             COALESCE(ls.sharpe_ratio, -999999) DESC,

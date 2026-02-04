@@ -112,7 +112,9 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
 
 /**
  * Build cascading tiebreaker ORDER BY clauses.
- * Priority: Score → P&L$ → ROI% → Sharpe → Win Rate → MDD → Trades → id
+ *
+ * First tiebreaker: traders with no snapshot (pending sync) always sort last.
+ * Then: Score → P&L$ → ROI% → Sharpe → Win Rate → MDD → Trades → id.
  * Skips whichever column is the primary sort. NULLs sort last (DESC uses
  * low sentinel, ASC for MDD uses high sentinel). Final tiebreaker is t.id
  * for deterministic pagination.
@@ -129,9 +131,16 @@ function buildTiebreakers(primaryCol: string): string {
     ["num_trades", "DESC", -999999],
   ];
 
-  const clauses = cascade
-    .filter(([col]) => col !== primaryCol)
-    .map(([col, dir, sentinel]) => `COALESCE(ls.${col}, ${sentinel}) ${dir}`);
+  // Traders with no snapshot data always sort below traders that have data
+  const clauses: string[] = [
+    "CASE WHEN ls.trader_id IS NULL THEN 1 ELSE 0 END ASC",
+  ];
+
+  for (const [col, dir, sentinel] of cascade) {
+    if (col !== primaryCol) {
+      clauses.push(`COALESCE(ls.${col}, ${sentinel}) ${dir}`);
+    }
+  }
 
   // Final deterministic tiebreaker
   clauses.push("t.id ASC");
