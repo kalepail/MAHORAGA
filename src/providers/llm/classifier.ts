@@ -1,6 +1,6 @@
-import type { LLMProvider } from "../types";
-import type { EventType } from "../../mcp/types";
 import { nowISO } from "../../lib/utils";
+import type { EventType } from "../../mcp/types";
+import type { LLMProvider } from "../types";
 
 const EVENT_CLASSIFICATION_PROMPT = `You are a financial event classifier. Analyze the following news/event content and extract structured information.
 
@@ -79,9 +79,7 @@ export async function classifyEvent(
 
     return {
       event_type: eventType,
-      symbols: Array.isArray(parsed.symbols)
-        ? parsed.symbols.map((s) => String(s).toUpperCase())
-        : [],
+      symbols: Array.isArray(parsed.symbols) ? parsed.symbols.map((s) => String(s).toUpperCase()) : [],
       summary: String(parsed.summary || "").slice(0, 500),
       confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
     };

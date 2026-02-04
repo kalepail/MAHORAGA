@@ -1,21 +1,16 @@
 export const R2Paths = {
-  newsArticle: (symbol: string, date: string, slug: string) =>
-    `content/${symbol}/news/${date}-${slug}.md`,
+  newsArticle: (symbol: string, date: string, slug: string) => `content/${symbol}/news/${date}-${slug}.md`,
 
-  report: (symbol: string, timestamp: string) =>
-    `content/${symbol}/reports/${timestamp}.md`,
+  report: (symbol: string, timestamp: string) => `content/${symbol}/reports/${timestamp}.md`,
 
-  latestReport: (symbol: string) =>
-    `content/${symbol}/reports/latest.md`,
+  latestReport: (symbol: string) => `content/${symbol}/reports/latest.md`,
 
-  rawEvent: (source: string, eventId: string) =>
-    `raw/${source}/${eventId}.json`,
+  rawEvent: (source: string, eventId: string) => `raw/${source}/${eventId}.json`,
 
   scrapedContent: (domain: string, path: string, timestamp: string) =>
     `scraped/${domain}/${encodeURIComponent(path)}/${timestamp}.html`,
 
-  tradeSnapshot: (tradeId: string) =>
-    `trades/${tradeId}/snapshot.json`,
+  tradeSnapshot: (tradeId: string) => `trades/${tradeId}/snapshot.json`,
 } as const;
 
 export function parseNewsPath(key: string): {

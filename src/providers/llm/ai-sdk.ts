@@ -1,11 +1,11 @@
-import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createXai } from "@ai-sdk/xai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createXai } from "@ai-sdk/xai";
+import { generateText } from "ai";
 import { createError, ErrorCode } from "../../lib/errors";
-import type { LLMProvider, CompletionParams, CompletionResult } from "../types";
+import type { CompletionParams, CompletionResult, LLMProvider } from "../types";
 
 /**
  * Supported AI SDK providers and their environment variable mapping
@@ -36,6 +36,8 @@ export interface AISDKConfig {
   model: string;
   /** API keys for each provider */
   apiKeys: Partial<Record<SupportedProvider, string>>;
+  /** Optional OpenAI base URL override (e.g., OpenAI-compatible proxy). */
+  openaiBaseUrl?: string;
 }
 
 type ProviderFactory =
@@ -47,7 +49,7 @@ type ProviderFactory =
 
 /**
  * AI SDK Provider - Supports multiple AI providers via Vercel AI SDK
- * 
+ *
  * Supports 5 providers: OpenAI, Anthropic, Google, xAI, DeepSeek
  * Model format: "provider/model" (e.g., "openai/gpt-4o", "xai/grok-4")
  */
@@ -60,7 +62,12 @@ export class AISDKProvider implements LLMProvider {
 
     // Initialize providers based on available API keys
     if (config.apiKeys.openai) {
-      this.providers.openai = createOpenAI({ apiKey: config.apiKeys.openai });
+      const rawBaseUrl = config.openaiBaseUrl?.trim().replace(/\/+$/, "");
+      const openaiOptions: { apiKey: string; baseURL?: string } = { apiKey: config.apiKeys.openai };
+      if (rawBaseUrl) {
+        openaiOptions.baseURL = rawBaseUrl;
+      }
+      this.providers.openai = createOpenAI(openaiOptions);
     }
     if (config.apiKeys.anthropic) {
       this.providers.anthropic = createAnthropic({ apiKey: config.apiKeys.anthropic });
@@ -111,7 +118,7 @@ export class AISDKProvider implements LLMProvider {
 
       const result = await generateText({
         model: provider(modelId),
-        messages: params.messages.map(msg => ({
+        messages: params.messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
         })),
@@ -128,10 +135,7 @@ export class AISDKProvider implements LLMProvider {
         },
       };
     } catch (error) {
-      throw createError(
-        ErrorCode.PROVIDER_ERROR,
-        `AI SDK error: ${String(error)}`
-      );
+      throw createError(ErrorCode.PROVIDER_ERROR, `AI SDK error: ${String(error)}`);
     }
   }
 }
@@ -145,7 +149,7 @@ export interface LegacyAISDKConfig {
 
 export function createAISDKProvider(config: AISDKConfig | LegacyAISDKConfig): AISDKProvider {
   // Handle legacy config format
-  if ('openaiApiKey' in config || 'anthropicApiKey' in config) {
+  if ("openaiApiKey" in config || "anthropicApiKey" in config) {
     const legacyConfig = config as LegacyAISDKConfig;
     return new AISDKProvider({
       model: legacyConfig.model,

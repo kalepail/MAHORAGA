@@ -1,5 +1,5 @@
+import type { OptionContract, OptionSnapshot, OptionsChain, OptionsProvider } from "../types";
 import type { AlpacaClient } from "./client";
-import type { OptionsProvider, OptionsChain, OptionContract, OptionSnapshot } from "../types";
 
 // ============================================================================
 // Alpaca Options API Types
@@ -129,11 +129,7 @@ export function getDTE(expirationDate: string): number {
 /**
  * Get expiration dates within a DTE range
  */
-export function filterExpirationsByDTE(
-  expirations: string[],
-  minDTE: number,
-  maxDTE: number
-): string[] {
+export function filterExpirationsByDTE(expirations: string[], minDTE: number, maxDTE: number): string[] {
   return expirations.filter((exp) => {
     const dte = getDTE(exp);
     return dte >= minDTE && dte <= maxDTE;
@@ -211,7 +207,7 @@ export class AlpacaOptionsProvider implements OptionsProvider {
   async getSnapshot(contractSymbol: string): Promise<OptionSnapshot> {
     const snapshots = await this.getSnapshots([contractSymbol]);
     const snapshot = snapshots[contractSymbol];
-    
+
     if (!snapshot) {
       // Return empty snapshot if not found
       return {
@@ -224,7 +220,7 @@ export class AlpacaOptionsProvider implements OptionsProvider {
         },
       };
     }
-    
+
     return snapshot;
   }
 
@@ -296,10 +292,7 @@ export class AlpacaOptionsProvider implements OptionsProvider {
     const queryString = searchParams.toString();
     const path = `/v2/options/contracts${queryString ? `?${queryString}` : ""}`;
 
-    const response = await this.client.tradingRequest<AlpacaOptionsContractsResponse>(
-      "GET",
-      path
-    );
+    const response = await this.client.tradingRequest<AlpacaOptionsContractsResponse>("GET", path);
 
     return (response.option_contracts || []).map(parseOptionContract);
   }
@@ -341,7 +334,7 @@ export class AlpacaOptionsProvider implements OptionsProvider {
     const today = new Date();
     const minDate = new Date(today);
     const maxDate = new Date(today);
-    
+
     if (options.minDTE) {
       minDate.setDate(minDate.getDate() + options.minDTE);
     }

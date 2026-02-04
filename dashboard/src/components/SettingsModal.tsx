@@ -25,7 +25,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
     window.location.reload()
   }
 
-  const handleChange = (key: keyof Config, value: string | number) => {
+  const handleChange = <K extends keyof Config>(key: K, value: Config[K]) => {
     setLocalConfig(prev => ({ ...prev, [key]: value }))
   }
 
@@ -129,16 +129,6 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                   onChange={e => handleChange('min_analyst_confidence', Number(e.target.value))}
                 />
               </div>
-              <div>
-                <label className="hud-label block mb-1">Sell Sentiment Threshold</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  className="hud-input w-full"
-                  value={localConfig.sell_sentiment_threshold}
-                  onChange={e => handleChange('sell_sentiment_threshold', Number(e.target.value))}
-                />
-              </div>
             </div>
           </div>
 
@@ -203,7 +193,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                 <select
                   className="hud-input w-full"
                   value={localConfig.llm_provider || 'openai-raw'}
-                  onChange={e => handleChange('llm_provider', e.target.value)}
+                  onChange={e => handleChange('llm_provider', e.target.value as Config['llm_provider'])}
                 >
                   <option value="openai-raw">OpenAI Direct (default)</option>
                   <option value="ai-sdk">AI SDK (5 providers)</option>
@@ -215,7 +205,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                 </select>
                 <p className="text-[9px] text-hud-text-dim mt-1">
                   {localConfig.llm_provider === 'ai-sdk' && 'Supports: OpenAI, Anthropic, Google, xAI, DeepSeek'}
-                  {(!localConfig.llm_provider || localConfig.llm_provider === 'openai-raw') && 'Uses OPENAI_API_KEY directly.'}
+                  {(!localConfig.llm_provider || localConfig.llm_provider === 'openai-raw') && 'Uses OPENAI_API_KEY directly (+ optional OPENAI_BASE_URL).'}
                   {localConfig.llm_provider &&
                     !['openai-raw', 'ai-sdk', 'cloudflare-gateway'].includes(localConfig.llm_provider) &&
                     'Provider is configured in the backend; selection is hidden in the dashboard.'}
@@ -377,7 +367,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                     type="checkbox"
                     className="hud-input w-4 h-4"
                     checked={localConfig.options_enabled || false}
-                    onChange={e => handleChange('options_enabled', e.target.checked ? 1 : 0)}
+                    onChange={e => handleChange('options_enabled', e.target.checked)}
                   />
                   <span className="hud-label">Enable Options Trading</span>
                 </label>
@@ -436,16 +426,6 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                 />
               </div>
               <div>
-                <label className="hud-label block mb-1">Max Positions</label>
-                <input
-                  type="number"
-                  className="hud-input w-full"
-                  value={localConfig.options_max_positions || 3}
-                  onChange={e => handleChange('options_max_positions', Number(e.target.value))}
-                  disabled={!localConfig.options_enabled}
-                />
-              </div>
-              <div>
                 <label className="hud-label block mb-1">Stop Loss (%)</label>
                 <input
                   type="number"
@@ -478,7 +458,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                     type="checkbox"
                     className="hud-input w-4 h-4"
                     checked={localConfig.crypto_enabled || false}
-                    onChange={e => handleChange('crypto_enabled', e.target.checked ? 1 : 0)}
+                    onChange={e => handleChange('crypto_enabled', e.target.checked)}
                   />
                   <span className="hud-label">Enable Crypto Trading</span>
                 </label>
@@ -490,7 +470,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                   type="text"
                   className="hud-input w-full"
                   value={(localConfig.crypto_symbols || ['BTC/USD', 'ETH/USD', 'SOL/USD']).join(', ')}
-                  onChange={e => handleChange('crypto_symbols', e.target.value.split(',').map(s => s.trim()) as unknown as string)}
+                  onChange={e => handleChange('crypto_symbols', e.target.value.split(',').map(s => s.trim()))}
                   disabled={!localConfig.crypto_enabled}
                   placeholder="BTC/USD, ETH/USD, SOL/USD, DOGE/USD, AVAX/USD..."
                 />
@@ -549,7 +529,7 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                     type="checkbox"
                     className="hud-input w-4 h-4"
                     checked={localConfig.stale_position_enabled ?? true}
-                    onChange={e => handleChange('stale_position_enabled', e.target.checked ? 1 : 0)}
+                    onChange={e => handleChange('stale_position_enabled', e.target.checked)}
                   />
                   <span className="hud-label">Enable Stale Position Detection</span>
                 </label>
@@ -586,17 +566,6 @@ export function SettingsModal({ config, onSave, onClose }: SettingsModalProps) {
                   disabled={!localConfig.stale_position_enabled}
                 />
                 <p className="text-[9px] text-hud-text-dim mt-1">Exit if volume drops to this % of entry</p>
-              </div>
-              <div>
-                <label className="hud-label block mb-1">No Mentions Hours</label>
-                <input
-                  type="number"
-                  className="hud-input w-full"
-                  value={localConfig.stale_no_mentions_hours || 8}
-                  onChange={e => handleChange('stale_no_mentions_hours', Number(e.target.value))}
-                  disabled={!localConfig.stale_position_enabled}
-                />
-                <p className="text-[9px] text-hud-text-dim mt-1">Exit if no mentions for N hours</p>
               </div>
             </div>
           </div>

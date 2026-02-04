@@ -66,10 +66,10 @@ export class SessionDO extends DurableObject<Env> {
           return new Response("Not found", { status: 404 });
       }
     } catch (error) {
-      return new Response(
-        JSON.stringify({ error: String(error) }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: String(error) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
@@ -89,9 +89,7 @@ export class SessionDO extends DurableObject<Env> {
 
   private async handleCheckRateLimit(): Promise<Response> {
     const now = Date.now();
-    const resetAt = this.state.rateLimitResetAt
-      ? new Date(this.state.rateLimitResetAt).getTime()
-      : 0;
+    const resetAt = this.state.rateLimitResetAt ? new Date(this.state.rateLimitResetAt).getTime() : 0;
 
     if (now > resetAt) {
       this.state.requestCount = 0;
@@ -111,9 +109,7 @@ export class SessionDO extends DurableObject<Env> {
 
   private async handleIncrementRequest(): Promise<Response> {
     const now = Date.now();
-    const resetAt = this.state.rateLimitResetAt
-      ? new Date(this.state.rateLimitResetAt).getTime()
-      : 0;
+    const resetAt = this.state.rateLimitResetAt ? new Date(this.state.rateLimitResetAt).getTime() : 0;
 
     if (now > resetAt) {
       this.state.requestCount = 1;
@@ -132,7 +128,7 @@ export class SessionDO extends DurableObject<Env> {
   }
 
   private async handleSetMetadata(request: Request): Promise<Response> {
-    const body = await request.json() as Record<string, unknown>;
+    const body = (await request.json()) as Record<string, unknown>;
     this.state.metadata = { ...this.state.metadata, ...body };
     await this.persist();
     return this.jsonResponse({ ok: true, metadata: this.state.metadata });
@@ -160,19 +156,13 @@ export function getSessionStub(env: Env, sessionId: string): DurableObjectStub {
   return env.SESSION.get(id);
 }
 
-export async function getSessionState(
-  env: Env,
-  sessionId: string
-): Promise<SessionState> {
+export async function getSessionState(env: Env, sessionId: string): Promise<SessionState> {
   const stub = getSessionStub(env, sessionId);
   const response = await stub.fetch(new Request("http://session/get"));
   return response.json() as Promise<SessionState>;
 }
 
-export async function authenticateSession(
-  env: Env,
-  sessionId: string
-): Promise<void> {
+export async function authenticateSession(env: Env, sessionId: string): Promise<void> {
   const stub = getSessionStub(env, sessionId);
   await stub.fetch(new Request("http://session/authenticate"));
 }
@@ -186,10 +176,7 @@ export async function checkRateLimit(
   return response.json() as Promise<{ allowed: boolean; remaining: number; resetAt: string | null }>;
 }
 
-export async function incrementRequest(
-  env: Env,
-  sessionId: string
-): Promise<void> {
+export async function incrementRequest(env: Env, sessionId: string): Promise<void> {
   const stub = getSessionStub(env, sessionId);
   await stub.fetch(new Request("http://session/increment-request"));
 }

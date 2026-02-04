@@ -39,9 +39,7 @@ export class StockTwitsProvider {
   }
 
   async getSymbolStream(symbol: string, limit = 30): Promise<StockTwitMessage[]> {
-    const response = await fetch(
-      `${this.baseUrl}/streams/symbol/${symbol}.json?limit=${limit}`
-    );
+    const response = await fetch(`${this.baseUrl}/streams/symbol/${symbol}.json?limit=${limit}`);
     if (!response.ok) {
       if (response.status === 404) return [];
       throw new Error(`StockTwits API error: ${response.status}`);
@@ -51,9 +49,7 @@ export class StockTwitsProvider {
   }
 
   async getTrendingStream(limit = 30): Promise<StockTwitMessage[]> {
-    const response = await fetch(
-      `${this.baseUrl}/streams/trending.json?limit=${limit}`
-    );
+    const response = await fetch(`${this.baseUrl}/streams/trending.json?limit=${limit}`);
     if (!response.ok) {
       throw new Error(`StockTwits API error: ${response.status}`);
     }

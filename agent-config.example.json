@@ -1,6 +1,4 @@
 {
-  "mcp_url": "http://localhost:8787/mcp",
-  
   "data_poll_interval_ms": 30000,
   "analyst_interval_ms": 120000,
   
@@ -8,7 +6,6 @@
   "max_positions": 5,
   "min_sentiment_score": 0.3,
   "min_analyst_confidence": 0.6,
-  "sell_sentiment_threshold": -0.2,
   
   "take_profit_pct": 10,
   "stop_loss_pct": 5,
@@ -16,7 +13,6 @@
   
   "llm_model": "gpt-4o-mini",
   "llm_analyst_model": "gpt-4o",
-  "llm_max_tokens": 500,
   
   "starting_equity": 100000
 }

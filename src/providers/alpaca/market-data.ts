@@ -1,5 +1,5 @@
+import type { Bar, BarsParams, MarketDataProvider, Quote, Snapshot } from "../types";
 import type { AlpacaClient } from "./client";
-import type { Bar, Quote, Snapshot, BarsParams, MarketDataProvider } from "../types";
 
 interface AlpacaBarsResponse {
   bars: Record<string, AlpacaBar[]>;
@@ -91,11 +91,7 @@ function parseSnapshot(symbol: string, raw: AlpacaSnapshot): Snapshot {
 export class AlpacaMarketDataProvider implements MarketDataProvider {
   constructor(private client: AlpacaClient) {}
 
-  async getBars(
-    symbol: string,
-    timeframe: string,
-    params?: BarsParams
-  ): Promise<Bar[]> {
+  async getBars(symbol: string, timeframe: string, params?: BarsParams): Promise<Bar[]> {
     const response = await this.client.dataRequest<AlpacaBarsResponse | { bars: AlpacaBar[] }>(
       "GET",
       `/v2/stocks/${encodeURIComponent(symbol)}/bars`,
@@ -135,11 +131,9 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
   }
 
   async getLatestBars(symbols: string[]): Promise<Record<string, Bar>> {
-    const response = await this.client.dataRequest<AlpacaLatestBarsResponse>(
-      "GET",
-      "/v2/stocks/bars/latest",
-      { symbols: symbols.join(",") }
-    );
+    const response = await this.client.dataRequest<AlpacaLatestBarsResponse>("GET", "/v2/stocks/bars/latest", {
+      symbols: symbols.join(","),
+    });
 
     const result: Record<string, Bar> = {};
     for (const [symbol, bar] of Object.entries(response.bars)) {
@@ -162,11 +156,9 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
   }
 
   async getQuotes(symbols: string[]): Promise<Record<string, Quote>> {
-    const response = await this.client.dataRequest<AlpacaQuotesResponse>(
-      "GET",
-      "/v2/stocks/quotes/latest",
-      { symbols: symbols.join(",") }
-    );
+    const response = await this.client.dataRequest<AlpacaQuotesResponse>("GET", "/v2/stocks/quotes/latest", {
+      symbols: symbols.join(","),
+    });
 
     const result: Record<string, Quote> = {};
     for (const [symbol, quote] of Object.entries(response.quotes)) {
@@ -185,7 +177,7 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
       throw new Error(`No snapshot data for ${symbol} (market may be closed)`);
     }
 
-    if ('latestTrade' in response) {
+    if ("latestTrade" in response) {
       return parseSnapshot(symbol, response as AlpacaSnapshot);
     }
 
@@ -211,11 +203,9 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
   }
 
   async getSnapshots(symbols: string[]): Promise<Record<string, Snapshot>> {
-    const response = await this.client.dataRequest<AlpacaSnapshotsResponse>(
-      "GET",
-      "/v2/stocks/snapshots",
-      { symbols: symbols.join(",") }
-    );
+    const response = await this.client.dataRequest<AlpacaSnapshotsResponse>("GET", "/v2/stocks/snapshots", {
+      symbols: symbols.join(","),
+    });
 
     const result: Record<string, Snapshot> = {};
     for (const [symbol, snapshot] of Object.entries(response)) {
@@ -225,8 +215,6 @@ export class AlpacaMarketDataProvider implements MarketDataProvider {
   }
 }
 
-export function createAlpacaMarketDataProvider(
-  client: AlpacaClient
-): AlpacaMarketDataProvider {
+export function createAlpacaMarketDataProvider(client: AlpacaClient): AlpacaMarketDataProvider {
   return new AlpacaMarketDataProvider(client);
 }

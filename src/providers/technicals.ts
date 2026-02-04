@@ -75,9 +75,7 @@ export function calculateRSI(prices: number[], period: number = 14): number | nu
   return 100 - 100 / (1 + rs);
 }
 
-export function calculateMACD(
-  prices: number[]
-): { macd: number; signal: number; histogram: number } | null {
+export function calculateMACD(prices: number[]): { macd: number; signal: number; histogram: number } | null {
   const ema12 = calculateEMA(prices, 12);
   const ema26 = calculateEMA(prices, 26);
 
@@ -119,7 +117,7 @@ export function calculateBollingerBands(
   const slice = prices.slice(-period);
   const middle = slice.reduce((a, b) => a + b, 0) / period;
 
-  const squaredDiffs = slice.map((p) => Math.pow(p - middle, 2));
+  const squaredDiffs = slice.map((p) => (p - middle) ** 2);
   const variance = squaredDiffs.reduce((a, b) => a + b, 0) / period;
   const std = Math.sqrt(variance);
 
@@ -141,11 +139,7 @@ export function calculateATR(bars: Bar[], period: number = 14): number | null {
   for (let i = 1; i < bars.length; i++) {
     const current = bars[i]!;
     const prev = bars[i - 1]!;
-    const tr = Math.max(
-      current.h - current.l,
-      Math.abs(current.h - prev.c),
-      Math.abs(current.l - prev.c)
-    );
+    const tr = Math.max(current.h - current.l, Math.abs(current.h - prev.c), Math.abs(current.l - prev.c));
     trueRanges.push(tr);
   }
 
@@ -159,10 +153,7 @@ export function calculateATR(bars: Bar[], period: number = 14): number | null {
   return atr;
 }
 
-export function computeTechnicals(
-  symbol: string,
-  bars: Bar[]
-): TechnicalIndicators {
+export function computeTechnicals(symbol: string, bars: Bar[]): TechnicalIndicators {
   const closes = bars.map((b) => b.c);
   const volumes = bars.map((b) => b.v);
   const currentPrice = closes[closes.length - 1] ?? 0;
@@ -230,8 +221,7 @@ export function detectSignals(technicals: TechnicalIndicators): Signal[] {
 
   if (technicals.bollinger !== null) {
     const bbPosition =
-      (technicals.price - technicals.bollinger.lower) /
-      (technicals.bollinger.upper - technicals.bollinger.lower);
+      (technicals.price - technicals.bollinger.lower) / (technicals.bollinger.upper - technicals.bollinger.lower);
 
     if (bbPosition < 0.1) {
       signals.push({
@@ -251,8 +241,7 @@ export function detectSignals(technicals: TechnicalIndicators): Signal[] {
   }
 
   if (technicals.sma_20 !== null && technicals.sma_50 !== null) {
-    const crossoverStrength =
-      Math.abs(technicals.sma_20 - technicals.sma_50) / technicals.price;
+    const crossoverStrength = Math.abs(technicals.sma_20 - technicals.sma_50) / technicals.price;
 
     if (technicals.sma_20 > technicals.sma_50) {
       signals.push({

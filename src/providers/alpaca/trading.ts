@@ -1,15 +1,17 @@
-import type { AlpacaClient } from "./client";
 import type {
   Account,
-  Position,
-  Order,
-  OrderParams,
+  Asset,
+  BrokerProvider,
   ListOrdersParams,
   MarketClock,
   MarketDay,
-  Asset,
-  BrokerProvider,
+  Order,
+  OrderParams,
+  PortfolioHistory,
+  PortfolioHistoryParams,
+  Position,
 } from "../types";
+import type { AlpacaClient } from "./client";
 
 interface AlpacaAccount {
   id: string;
@@ -147,11 +149,7 @@ export class AlpacaTradingProvider implements BrokerProvider {
     }
   }
 
-  async closePosition(
-    symbol: string,
-    qty?: number,
-    percentage?: number
-  ): Promise<Order> {
+  async closePosition(symbol: string, qty?: number, percentage?: number): Promise<Order> {
     let path = `/v2/positions/${encodeURIComponent(symbol)}`;
     const params = new URLSearchParams();
 
@@ -206,10 +204,7 @@ export class AlpacaTradingProvider implements BrokerProvider {
   }
 
   async getOrder(orderId: string): Promise<Order> {
-    return this.client.tradingRequest<Order>(
-      "GET",
-      `/v2/orders/${encodeURIComponent(orderId)}`
-    );
+    return this.client.tradingRequest<Order>("GET", `/v2/orders/${encodeURIComponent(orderId)}`);
   }
 
   async listOrders(params?: ListOrdersParams): Promise<Order[]> {
@@ -235,10 +230,7 @@ export class AlpacaTradingProvider implements BrokerProvider {
   }
 
   async cancelOrder(orderId: string): Promise<void> {
-    await this.client.tradingRequest<void>(
-      "DELETE",
-      `/v2/orders/${encodeURIComponent(orderId)}`
-    );
+    await this.client.tradingRequest<void>("DELETE", `/v2/orders/${encodeURIComponent(orderId)}`);
   }
 
   async cancelAllOrders(): Promise<void> {
@@ -256,10 +248,7 @@ export class AlpacaTradingProvider implements BrokerProvider {
   }
 
   async getCalendar(start: string, end: string): Promise<MarketDay[]> {
-    const raw = await this.client.tradingRequest<AlpacaCalendarDay[]>(
-      "GET",
-      `/v2/calendar?start=${start}&end=${end}`
-    );
+    const raw = await this.client.tradingRequest<AlpacaCalendarDay[]>("GET", `/v2/calendar?start=${start}&end=${end}`);
     return raw.map((day) => ({
       date: day.date,
       open: day.open,
@@ -270,10 +259,7 @@ export class AlpacaTradingProvider implements BrokerProvider {
 
   async getAsset(symbol: string): Promise<Asset | null> {
     try {
-      const raw = await this.client.tradingRequest<Asset>(
-        "GET",
-        `/v2/assets/${encodeURIComponent(symbol)}`
-      );
+      const raw = await this.client.tradingRequest<Asset>("GET", `/v2/assets/${encodeURIComponent(symbol)}`);
       return raw;
     } catch (error) {
       if ((error as { code?: string }).code === "NOT_FOUND") {
@@ -281,6 +267,27 @@ export class AlpacaTradingProvider implements BrokerProvider {
       }
       throw error;
     }
+  }
+
+  async getPortfolioHistory(params?: PortfolioHistoryParams): Promise<PortfolioHistory> {
+    let path = "/v2/account/portfolio/history";
+
+    if (params) {
+      const searchParams = new URLSearchParams();
+      if (params.period) searchParams.set("period", params.period);
+      if (params.timeframe) searchParams.set("timeframe", params.timeframe);
+      if (params.intraday_reporting) searchParams.set("intraday_reporting", params.intraday_reporting);
+      if (params.start) searchParams.set("start", params.start);
+      if (params.end) searchParams.set("end", params.end);
+      if (params.pnl_reset) searchParams.set("pnl_reset", params.pnl_reset);
+
+      const queryString = searchParams.toString();
+      if (queryString) {
+        path += `?${queryString}`;
+      }
+    }
+
+    return this.client.tradingRequest<PortfolioHistory>("GET", path);
   }
 }
 

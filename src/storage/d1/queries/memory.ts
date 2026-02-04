@@ -1,5 +1,5 @@
-import { D1Client, TradeJournalRow } from "../client";
 import { generateId, nowISO } from "../../../lib/utils";
+import type { D1Client, TradeJournalRow } from "../client";
 
 export interface CreateJournalEntryParams {
   trade_id?: string;
@@ -15,10 +15,7 @@ export interface CreateJournalEntryParams {
   notes?: string;
 }
 
-export async function createJournalEntry(
-  db: D1Client,
-  params: CreateJournalEntryParams
-): Promise<string> {
+export async function createJournalEntry(db: D1Client, params: CreateJournalEntryParams): Promise<string> {
   const id = generateId();
   const now = nowISO();
 
@@ -57,10 +54,7 @@ export interface LogOutcomeParams {
   lessons_learned?: string;
 }
 
-export async function logOutcome(
-  db: D1Client,
-  params: LogOutcomeParams
-): Promise<void> {
+export async function logOutcome(db: D1Client, params: LogOutcomeParams): Promise<void> {
   const now = nowISO();
 
   await db.run(
@@ -81,14 +75,8 @@ export async function logOutcome(
   );
 }
 
-export async function getJournalEntry(
-  db: D1Client,
-  id: string
-): Promise<TradeJournalRow | null> {
-  return db.executeOne<TradeJournalRow>(
-    `SELECT * FROM trade_journal WHERE id = ?`,
-    [id]
-  );
+export async function getJournalEntry(db: D1Client, id: string): Promise<TradeJournalRow | null> {
+  return db.executeOne<TradeJournalRow>(`SELECT * FROM trade_journal WHERE id = ?`, [id]);
 }
 
 export async function queryJournal(
@@ -238,26 +226,19 @@ export async function createMemoryRule(
 }
 
 export async function getActiveRules(db: D1Client): Promise<MemoryRuleRow[]> {
-  return db.execute<MemoryRuleRow>(
-    `SELECT * FROM memory_rules WHERE active = 1 ORDER BY created_at DESC`
-  );
+  return db.execute<MemoryRuleRow>(`SELECT * FROM memory_rules WHERE active = 1 ORDER BY created_at DESC`);
 }
 
-export async function getPreferences(
-  db: D1Client
-): Promise<Record<string, unknown>> {
+export async function getPreferences(db: D1Client): Promise<Record<string, unknown>> {
   const row = await db.executeOne<{ preferences_json: string }>(
     `SELECT preferences_json FROM memory_preferences WHERE id = 1`
   );
   return row ? JSON.parse(row.preferences_json) : {};
 }
 
-export async function setPreferences(
-  db: D1Client,
-  preferences: Record<string, unknown>
-): Promise<void> {
-  await db.run(
-    `UPDATE memory_preferences SET preferences_json = ?, updated_at = ? WHERE id = 1`,
-    [JSON.stringify(preferences), nowISO()]
-  );
+export async function setPreferences(db: D1Client, preferences: Record<string, unknown>): Promise<void> {
+  await db.run(`UPDATE memory_preferences SET preferences_json = ?, updated_at = ? WHERE id = 1`, [
+    JSON.stringify(preferences),
+    nowISO(),
+  ]);
 }

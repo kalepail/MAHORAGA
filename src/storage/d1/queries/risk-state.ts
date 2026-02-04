@@ -1,5 +1,5 @@
-import { D1Client, RiskStateRow } from "../client";
 import { nowISO } from "../../../lib/utils";
+import type { D1Client, RiskStateRow } from "../client";
 
 export interface RiskState {
   kill_switch_active: boolean;
@@ -13,9 +13,7 @@ export interface RiskState {
 }
 
 export async function getRiskState(db: D1Client): Promise<RiskState> {
-  const row = await db.executeOne<RiskStateRow>(
-    `SELECT * FROM risk_state WHERE id = 1`
-  );
+  const row = await db.executeOne<RiskStateRow>(`SELECT * FROM risk_state WHERE id = 1`);
 
   if (!row) {
     return {
@@ -42,10 +40,7 @@ export async function getRiskState(db: D1Client): Promise<RiskState> {
   };
 }
 
-export async function enableKillSwitch(
-  db: D1Client,
-  reason: string
-): Promise<void> {
+export async function enableKillSwitch(db: D1Client, reason: string): Promise<void> {
   const now = nowISO();
   await db.run(
     `UPDATE risk_state SET kill_switch_active = 1, kill_switch_reason = ?, kill_switch_at = ?, updated_at = ? WHERE id = 1`,
@@ -60,10 +55,7 @@ export async function disableKillSwitch(db: D1Client): Promise<void> {
   );
 }
 
-export async function recordDailyLoss(
-  db: D1Client,
-  lossUsd: number
-): Promise<void> {
+export async function recordDailyLoss(db: D1Client, lossUsd: number): Promise<void> {
   const now = nowISO();
   await db.run(
     `UPDATE risk_state SET daily_loss_usd = daily_loss_usd + ?, last_loss_at = ?, updated_at = ? WHERE id = 1`,
@@ -71,14 +63,8 @@ export async function recordDailyLoss(
   );
 }
 
-export async function setCooldown(
-  db: D1Client,
-  cooldownUntil: string
-): Promise<void> {
-  await db.run(
-    `UPDATE risk_state SET cooldown_until = ?, updated_at = ? WHERE id = 1`,
-    [cooldownUntil, nowISO()]
-  );
+export async function setCooldown(db: D1Client, cooldownUntil: string): Promise<void> {
+  await db.run(`UPDATE risk_state SET cooldown_until = ?, updated_at = ? WHERE id = 1`, [cooldownUntil, nowISO()]);
 }
 
 export async function resetDailyLoss(db: D1Client): Promise<void> {

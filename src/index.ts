@@ -1,7 +1,7 @@
-import type { Env } from "./env.d";
-import { MahoragaMcpAgent } from "./mcp/agent";
-import { handleCronEvent } from "./jobs/cron";
 import { getHarnessStub } from "./durable-objects/mahoraga-harness";
+import type { Env } from "./env.d";
+import { handleCronEvent } from "./jobs/cron";
+import { MahoragaMcpAgent } from "./mcp/agent";
 
 export { SessionDO } from "./durable-objects/session";
 export { MahoragaMcpAgent };
@@ -25,10 +25,10 @@ function isAuthorized(request: Request, env: Env): boolean {
 }
 
 function unauthorizedResponse(): Response {
-  return new Response(
-    JSON.stringify({ error: "Unauthorized. Requires: Authorization: Bearer <MAHORAGA_API_TOKEN>" }),
-    { status: 401, headers: { "Content-Type": "application/json" } }
-  );
+  return new Response(JSON.stringify({ error: "Unauthorized. Requires: Authorization: Bearer <MAHORAGA_API_TOKEN>" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 const CORS_HEADERS = {
@@ -58,11 +58,7 @@ function corsPreflightResponse(): Response {
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // Handle CORS preflight for /agent/* routes
@@ -113,22 +109,20 @@ export default {
       const agentPath = url.pathname.replace("/agent", "") || "/status";
       const agentUrl = new URL(agentPath, "http://harness");
       agentUrl.search = url.search;
-      const response = await stub.fetch(new Request(agentUrl.toString(), {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-      }));
+      const response = await stub.fetch(
+        new Request(agentUrl.toString(), {
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+        })
+      );
       return withCors(response);
     }
 
     return new Response("Not found", { status: 404 });
   },
 
-  async scheduled(
-    event: ScheduledEvent,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     const cronId = event.cron;
     console.log(`Cron triggered: ${cronId} at ${new Date().toISOString()}`);
     ctx.waitUntil(handleCronEvent(cronId, env));

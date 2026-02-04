@@ -1,5 +1,5 @@
-import type { NewsProvider, RawEvent, NewsItem } from "../types";
 import { generateId } from "../../lib/utils";
+import type { NewsItem, NewsProvider, RawEvent } from "../types";
 
 const SEC_BASE_URL = "https://www.sec.gov";
 
@@ -79,15 +79,12 @@ export class SECEdgarProvider implements NewsProvider {
         return items;
       }
 
-      const response = await fetch(
-        `https://data.sec.gov/submissions/CIK${cik.padStart(10, "0")}.json`,
-        {
-          headers: {
-            "User-Agent": "Mahoraga Trading Bot (contact@example.com)",
-            Accept: "application/json",
-          },
-        }
-      );
+      const response = await fetch(`https://data.sec.gov/submissions/CIK${cik.padStart(10, "0")}.json`, {
+        headers: {
+          "User-Agent": "Mahoraga Trading Bot (contact@example.com)",
+          Accept: "application/json",
+        },
+      });
 
       if (!response.ok) {
         return items;
@@ -148,10 +145,10 @@ export class SECEdgarProvider implements NewsProvider {
       const updated = this.extractTag(entryXml, "updated") || new Date().toISOString();
 
       const formMatch = title.match(/\((\d+-\w+|\w+)\)/);
-      const form = formMatch ? formMatch[1] ?? "" : "";
+      const form = formMatch ? (formMatch[1] ?? "") : "";
 
       const companyMatch = title.match(/^([^(]+)/);
-      const company = companyMatch ? companyMatch[1]?.trim() ?? "" : "";
+      const company = companyMatch ? (companyMatch[1]?.trim() ?? "") : "";
 
       entries.push({ id, title, updated, form, company });
     }
@@ -162,7 +159,7 @@ export class SECEdgarProvider implements NewsProvider {
   private extractTag(xml: string, tag: string): string | null {
     const regex = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`);
     const match = xml.match(regex);
-    return match ? match[1] ?? null : null;
+    return match ? (match[1] ?? null) : null;
   }
 
   private async getCik(symbol: string): Promise<string | null> {
@@ -171,23 +168,17 @@ export class SECEdgarProvider implements NewsProvider {
     }
 
     try {
-      const response = await fetch(
-        "https://www.sec.gov/files/company_tickers.json",
-        {
-          headers: {
-            "User-Agent": "Mahoraga Trading Bot (contact@example.com)",
-          },
-        }
-      );
+      const response = await fetch("https://www.sec.gov/files/company_tickers.json", {
+        headers: {
+          "User-Agent": "Mahoraga Trading Bot (contact@example.com)",
+        },
+      });
 
       if (!response.ok) {
         return null;
       }
 
-      const data = (await response.json()) as Record<
-        string,
-        { cik_str: number; ticker: string; title: string }
-      >;
+      const data = (await response.json()) as Record<string, { cik_str: number; ticker: string; title: string }>;
 
       for (const entry of Object.values(data)) {
         this.symbolToCik.set(entry.ticker.toUpperCase(), String(entry.cik_str));

@@ -17,11 +17,7 @@ export class R2Client {
     return JSON.parse(text) as T;
   }
 
-  async put(
-    key: string,
-    value: string | ArrayBuffer | ReadableStream,
-    options?: R2PutOptions
-  ): Promise<R2Object> {
+  async put(key: string, value: string | ArrayBuffer | ReadableStream, options?: R2PutOptions): Promise<R2Object> {
     return this.bucket.put(key, value, options);
   }
 

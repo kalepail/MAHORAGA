@@ -92,9 +92,10 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #fdfcfa; --bg-subtle: #f5f3ef; --border: #e8e4dd;
-      --muted: #9a9488; --subtle: #6b655c; --text: #3d3a35; --bright: #1a1815;
-      --accent: #2563eb; --success: #16a34a;
+      --bg: #0a0c0e; --bg-subtle: #0d1012; --border: rgba(122, 155, 168, 0.15);
+      --muted: #4a5a62; --subtle: #6a7a82; --text: #7a9ba8; --bright: #c8dce4;
+      --accent: #7a9ba8; --success: #4a9868;
+      --sidebar-width: 200px;
     }
     html { font-size: 14px; }
     body {
@@ -103,17 +104,130 @@
       min-height: 100vh; line-height: 1.7;
       -webkit-font-smoothing: antialiased;
     }
-    ::selection { background: var(--accent); color: white; }
-    .container { max-width: 640px; margin: 0 auto; padding: 48px 24px 120px; }
-    
-    .nav { margin-bottom: 48px; }
-    .nav a {
-      color: var(--muted); text-decoration: none; font-size: 11px;
-      letter-spacing: 1px; text-transform: uppercase;
+    ::selection { background: var(--accent); color: var(--bg); }
+
+    /* Disclaimer bar */
+    .disclaimer {
+      background: #111;
+      color: #999;
+      text-align: center;
+      padding: 10px 16px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Top header */
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+
+    .site-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--bright);
+    }
+
+    .site-logo img {
+      width: 18px;
+      height: 18px;
+    }
+
+    .site-logo span {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .header-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .header-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
       transition: color 0.15s;
     }
-    .nav a:hover { color: var(--bright); }
-    
+
+    .header-links a:hover {
+      color: var(--bright);
+    }
+
+    /* Layout */
+    .docs-layout {
+      display: flex;
+      min-height: calc(100vh - 100px);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      border-right: 1px solid var(--border);
+      padding: 32px 24px;
+      position: sticky;
+      top: 57px;
+      height: calc(100vh - 57px);
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar-title {
+      font-size: 9px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sidebar-nav a {
+      color: var(--subtle);
+      text-decoration: none;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .sidebar-nav a:hover {
+      color: var(--bright);
+      background: var(--bg-subtle);
+    }
+
+    .sidebar-nav a.active {
+      color: var(--bright);
+      background: var(--bg-subtle);
+      font-weight: 500;
+    }
+
+    /* Main content */
+    .main-content {
+      flex: 1;
+      max-width: 720px;
+      padding: 48px 48px 120px;
+      margin: 0 auto;
+    }
+
     h1 {
       font-size: 20px; font-weight: 600; color: var(--bright);
       margin-bottom: 8px; letter-spacing: 1px;
@@ -143,13 +257,13 @@
     li { margin-bottom: 8px; }
     
     .note {
-      background: #dbeafe; border: 1px solid #3b82f6;
-      padding: 12px 16px; font-size: 12px; color: #1e40af;
+      background: rgba(122, 155, 168, 0.1); border: 1px solid rgba(122, 155, 168, 0.3);
+      padding: 12px 16px; font-size: 12px; color: var(--bright);
       margin: 16px 0;
     }
     .warning {
-      background: #fef3c7; border: 1px solid #f59e0b;
-      padding: 12px 16px; font-size: 12px; color: #92400e;
+      background: rgba(184, 152, 72, 0.1); border: 1px solid rgba(184, 152, 72, 0.3);
+      padding: 12px 16px; font-size: 12px; color: #b89848;
       margin: 16px 0;
     }
     
@@ -164,143 +278,169 @@
     a { color: var(--accent); }
     a:hover { text-decoration: none; }
 
-    .disclaimer {
-      background: #111;
-      color: #999;
-      text-align: center;
-      padding: 10px 16px;
-      font-size: 11px;
-      letter-spacing: 0.5px;
+    /* Mobile */
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+      .main-content {
+        padding: 32px 24px 80px;
+      }
+      .site-header {
+        padding: 12px 16px;
+      }
+      .header-links {
+        gap: 16px;
+      }
     }
-    
-    .footer {
-      margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border);
-      font-size: 11px; color: var(--muted);
-    }
-    .footer a { color: var(--subtle); text-decoration: none; margin-right: 24px; }
-    .footer a:hover { color: var(--bright); }
   </style>
 </head>
 <body>
   <div class="disclaimer">For educational purposes only. Trading involves substantial risk of loss. Not financial advice.</div>
-  <div class="container">
-    <nav class="nav">
-      <a href="./index.html">← Back to Mahoraga</a>
+
+  <header class="site-header">
+    <a href="./index.html" class="site-logo">
+      <img src="./mahoraga.svg" alt="Mahoraga">
+      <span>Mahoraga</span>
+    </a>
+    <nav class="header-links">
+      <a href="https://github.com/ygwyg/MAHORAGA">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <a href="https://discord.gg/Ys8KpsW5NN">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+        Discord
+      </a>
     </nav>
+  </header>
 
-    <h1>Getting Started</h1>
-    <p class="subtitle">Get Mahoraga running in 10 minutes.</p>
+  <div class="docs-layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">Documentation</div>
+      <nav class="sidebar-nav">
+        <a href="./getting-started.html" class="active">Getting Started</a>
+        <a href="./architecture.html">Architecture</a>
+        <a href="./configuration.html">Configuration</a>
+        <a href="./harness.html">Harness</a>
+        <a href="./extending.html">Extending</a>
+      </nav>
+    </aside>
 
-    <h2>Prerequisites</h2>
-    <ul>
-      <li>Node.js 18 or higher</li>
-      <li>Alpaca account (free, supports paper trading)</li>
-      <li>OpenAI API key (for LLM analysis)</li>
-    </ul>
+    <main class="main-content">
+      <h1>Getting Started</h1>
+      <p class="subtitle">Get Mahoraga running in 10 minutes.</p>
 
-    <h2>1. Clone and Install</h2>
-    <pre>git clone https://github.com/ygwyg/MAHORAGA.git
+      <h2>Prerequisites</h2>
+      <ul>
+        <li>Node.js 18 or higher</li>
+        <li>Alpaca account (free, supports paper trading)</li>
+        <li>OpenAI API key (for LLM analysis)</li>
+      </ul>
+
+      <h2>1. Clone and Install</h2>
+      <pre>git clone https://github.com/ygwyg/MAHORAGA.git
 cd MAHORAGA
 npm install
 cd dashboard && npm install && cd ..</pre>
 
-    <h2>2. Configure API Keys</h2>
-    <p>Create a <code>.dev.vars</code> file in the project root:</p>
-    <pre>ALPACA_API_KEY=your_alpaca_key
+      <h2>2. Configure API Keys</h2>
+      <p>Create a <code>.dev.vars</code> file in the project root:</p>
+      <pre>ALPACA_API_KEY=your_alpaca_key
 ALPACA_API_SECRET=your_alpaca_secret
 ALPACA_PAPER=true
 OPENAI_API_KEY=your_openai_key
+OPENAI_BASE_URL=https://api.openai.com/v1  # optional (OpenAI-compatible proxy)
 MAHORAGA_API_TOKEN=generate_a_secure_random_token
 KILL_SWITCH_SECRET=another_secure_random_token</pre>
 
-    <p>Generate secure tokens with: <code>openssl rand -base64 48</code></p>
+      <p>Generate secure tokens with: <code>openssl rand -base64 48</code></p>
 
-    <div class="warning">
-      <strong>Important:</strong> Always start with <code>ALPACA_PAPER=true</code> until you understand how the system works.
-    </div>
+      <div class="warning">
+        <strong>Important:</strong> Always start with <code>ALPACA_PAPER=true</code> until you understand how the system works.
+      </div>
 
-    <table>
-      <tr><th>Secret</th><th>Purpose</th></tr>
-      <tr><td><code>MAHORAGA_API_TOKEN</code></td><td>Required for all API access (dashboard, curl commands)</td></tr>
-      <tr><td><code>KILL_SWITCH_SECRET</code></td><td>Emergency shutdown + approval token signing</td></tr>
-    </table>
+      <table>
+        <tr><th>Secret</th><th>Purpose</th></tr>
+        <tr><td><code>MAHORAGA_API_TOKEN</code></td><td>Required for all API access (dashboard, curl commands)</td></tr>
+        <tr><td><code>KILL_SWITCH_SECRET</code></td><td>Emergency shutdown + approval token signing</td></tr>
+      </table>
 
-    <h2>3. Get Your API Keys</h2>
-    
-    <p><strong>Alpaca (Required)</strong></p>
-    <ol>
-      <li>Create a free account at <a href="https://alpaca.markets">alpaca.markets</a></li>
-      <li>Go to <strong>Paper Trading</strong> → <strong>API Keys</strong></li>
-      <li>Click <strong>Generate New Keys</strong></li>
-      <li>Copy both the key and secret to <code>.dev.vars</code></li>
-    </ol>
+      <h2>3. Get Your API Keys</h2>
+      
+      <p><strong>Alpaca (Required)</strong></p>
+      <ol>
+        <li>Create a free account at <a href="https://alpaca.markets">alpaca.markets</a></li>
+        <li>Go to <strong>Paper Trading</strong> → <strong>API Keys</strong></li>
+        <li>Click <strong>Generate New Keys</strong></li>
+        <li>Copy both the key and secret to <code>.dev.vars</code></li>
+      </ol>
 
-    <p><strong>OpenAI (Required)</strong></p>
-    <ol>
-      <li>Create an account at <a href="https://platform.openai.com">platform.openai.com</a></li>
-      <li>Add billing and credits ($10 is plenty to start)</li>
-      <li>Go to <strong>API Keys</strong> → <strong>Create new secret key</strong></li>
-      <li>Add to <code>.dev.vars</code>: <code>OPENAI_API_KEY=sk-your_key</code></li>
-    </ol>
+      <p><strong>OpenAI (Required)</strong></p>
+      <ol>
+        <li>Create an account at <a href="https://platform.openai.com">platform.openai.com</a></li>
+        <li>Add billing and credits ($10 is plenty to start)</li>
+        <li>Go to <strong>API Keys</strong> → <strong>Create new secret key</strong></li>
+        <li>Add to <code>.dev.vars</code>: <code>OPENAI_API_KEY=sk-your_key</code></li>
+      </ol>
 
-    <div class="note">
-      <strong>Estimated costs:</strong> ~$0.50-2/day using gpt-4o-mini, depending on trading activity.
-    </div>
+      <div class="note">
+        <strong>Estimated costs:</strong> ~$0.50-2/day using gpt-4o-mini, depending on trading activity.
+      </div>
 
-    <h2>4. Start the MCP Server</h2>
-    <pre>npm run dev</pre>
-    <p>The server runs at <code>http://localhost:8787</code></p>
+      <h2>4. Start the Server</h2>
+      <pre>npm run dev</pre>
+      <p>The server runs at <code>http://localhost:8787</code>. You should see output like:</p>
+      <pre>Ready on http://localhost:8787</pre>
 
-    <h2>5. Enable the Trading Agent</h2>
-    <p>The agent runs as a Durable Object. All API endpoints require authentication:</p>
-    <pre># Set your token as an environment variable
-export MAHORAGA_TOKEN="your_token_from_dev_vars"
+      <h2>5. Enable the Trading Agent</h2>
+      <p>All API endpoints require your <code>MAHORAGA_API_TOKEN</code>:</p>
+      <pre># Set your token (copy from .dev.vars)
+export MAHORAGA_TOKEN="your_token_here"
 
 # Enable the agent
 curl -H "Authorization: Bearer $MAHORAGA_TOKEN" \
-  http://localhost:8787/agent/enable</pre>
-    <p>The agent will start monitoring sentiment sources and making trading decisions.</p>
+  http://localhost:8787/agent/enable
 
-    <h2>6. Open the Dashboard (Optional)</h2>
-    <p>In another terminal:</p>
-    <pre>cd dashboard
+# Check status
+curl -H "Authorization: Bearer $MAHORAGA_TOKEN" \
+  http://localhost:8787/agent/status</pre>
+      <p>The agent will start monitoring StockTwits and Reddit for trading signals.</p>
+
+      <h2>6. Open the Dashboard (Optional)</h2>
+      <p>In another terminal:</p>
+      <pre>cd dashboard
 npm run dev</pre>
-    <p>Open <code>http://localhost:5173</code> in your browser.</p>
-    
-    <div class="note">
-      <strong>First time setup:</strong> Click the Settings icon and enter your <code>MAHORAGA_API_TOKEN</code> to authenticate.
-    </div>
-    
-    <p>The dashboard shows:</p>
-    <ul>
-      <li>Account balance and positions</li>
-      <li>Current signals and research</li>
-      <li>Agent activity logs</li>
-      <li>LLM cost tracking</li>
-    </ul>
+      <p>Open <code>http://localhost:5173</code> in your browser.</p>
+      
+      <div class="note">
+        <strong>First time setup:</strong> Click the Settings icon and enter your <code>MAHORAGA_API_TOKEN</code> to authenticate.
+      </div>
+      
+      <p>The dashboard shows:</p>
+      <ul>
+        <li>Account balance and positions</li>
+        <li>Current signals and research</li>
+        <li>Agent activity logs</li>
+        <li>LLM cost tracking</li>
+      </ul>
 
-    <h2>What Happens Next</h2>
-    <p>The agent runs in a loop:</p>
-    <ol>
-      <li><strong>Data gathering (24/7)</strong> — Fetches trending stocks from StockTwits</li>
-      <li><strong>LLM research</strong> — Analyzes top signals for red flags and catalysts</li>
-      <li><strong>Trading (market hours)</strong> — Executes buy/sell based on LLM decisions</li>
-      <li><strong>Position management</strong> — Monitors held positions for exit signals</li>
-    </ol>
+      <h2>What Happens Next</h2>
+      <p>The agent runs in a loop:</p>
+      <ol>
+        <li><strong>Data gathering (24/7)</strong> — Fetches trending stocks from StockTwits</li>
+        <li><strong>LLM research</strong> — Analyzes top signals for red flags and catalysts</li>
+        <li><strong>Trading (market hours)</strong> — Executes buy/sell based on LLM decisions</li>
+        <li><strong>Position management</strong> — Monitors held positions for exit signals</li>
+      </ol>
 
-    <h2>Next Steps</h2>
-    <ul>
-      <li><a href="./configuration.html">Configuration</a> — Customize trading parameters</li>
-      <li><a href="./architecture.html">Architecture</a> — How the system works</li>
-      <li><a href="./extending.html">Extending</a> — Add your own data sources</li>
-    </ul>
-
-    <div class="footer">
-      <a href="./index.html">Home</a>
-      <a href="./configuration.html">Config</a>
-      <a href="https://github.com/ygwyg/MAHORAGA">GitHub</a>
-      <a href="https://discord.gg/Ys8KpsW5NN">Discord</a>
-    </div>
+      <h2>Next Steps</h2>
+      <ul>
+        <li><a href="./configuration.html">Configuration</a> — Customize trading parameters</li>
+        <li><a href="./architecture.html">Architecture</a> — How the system works</li>
+        <li><a href="./extending.html">Extending</a> — Add your own data sources</li>
+      </ul>
+    </main>
   </div>
 </body>
 </html>

@@ -25,21 +25,12 @@ function simpleHash(str: string): string {
   return Math.abs(hash).toString(16).padStart(8, "0");
 }
 
-export async function hmacSign(
-  data: string,
-  secret: string
-): Promise<string> {
+export async function hmacSign(data: string, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
   const messageData = encoder.encode(data);
 
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
 
   const signature = await crypto.subtle.sign("HMAC", key, messageData);
   return Array.from(new Uint8Array(signature))
@@ -47,11 +38,7 @@ export async function hmacSign(
     .join("");
 }
 
-export async function hmacVerify(
-  data: string,
-  signature: string,
-  secret: string
-): Promise<boolean> {
+export async function hmacVerify(data: string, signature: string, secret: string): Promise<boolean> {
   const expected = await hmacSign(data, secret);
   return expected === signature;
 }
@@ -64,7 +51,7 @@ export function parseBoolean(value: string | undefined, defaultValue: boolean): 
 export function parseNumber(value: string | undefined, defaultValue: number): number {
   if (value === undefined) return defaultValue;
   const parsed = parseFloat(value);
-  return isNaN(parsed) ? defaultValue : parsed;
+  return Number.isNaN(parsed) ? defaultValue : parsed;
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -73,22 +60,14 @@ export function sleep(ms: number): Promise<void> {
 
 export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - 3) + "...";
+  return `${str.slice(0, maxLength - 3)}...`;
 }
 
 export function sanitizeForLog(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== "object") return obj;
 
-  const sensitiveKeys = [
-    "password",
-    "secret",
-    "token",
-    "api_key",
-    "apiKey",
-    "authorization",
-    "approval_token",
-  ];
+  const sensitiveKeys = ["password", "secret", "token", "api_key", "apiKey", "authorization", "approval_token"];
 
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {

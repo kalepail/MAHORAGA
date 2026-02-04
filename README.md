@@ -71,6 +71,7 @@ npx wrangler secret put LLM_MODEL     # e.g. "gpt-4o-mini" or "anthropic/claude-
 
 # LLM API Keys (based on provider mode)
 npx wrangler secret put OPENAI_API_KEY         # For openai-raw or ai-sdk with OpenAI
+npx wrangler secret put OPENAI_BASE_URL        # Optional: override OpenAI base URL for openai-raw and ai-sdk (OpenAI models)
 # npx wrangler secret put ANTHROPIC_API_KEY    # For ai-sdk with Anthropic
 # npx wrangler secret put GOOGLE_GENERATIVE_AI_API_KEY  # For ai-sdk with Google
 # npx wrangler secret put XAI_API_KEY          # For ai-sdk with xAI/Grok
@@ -180,6 +181,10 @@ MAHORAGA supports multiple LLM providers via three modes:
 | `openai-raw` | Direct OpenAI API (default) | `OPENAI_API_KEY` |
 | `ai-sdk` | Vercel AI SDK with 5 providers | One or more provider keys |
 | `cloudflare-gateway` | Cloudflare AI Gateway (/compat) | `CLOUDFLARE_AI_GATEWAY_ACCOUNT_ID`, `CLOUDFLARE_AI_GATEWAY_ID`, `CLOUDFLARE_AI_GATEWAY_TOKEN` |
+
+**Optional OpenAI Base URL Override:**
+
+- `OPENAI_BASE_URL` — Override the base URL used for OpenAI requests. Applies to `LLM_PROVIDER=openai-raw` and OpenAI models in `LLM_PROVIDER=ai-sdk` (models starting with `openai/`). Default: `https://api.openai.com/v1`.
 
 **Cloudflare AI Gateway Notes:**
 

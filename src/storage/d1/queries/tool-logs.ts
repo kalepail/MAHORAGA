@@ -1,5 +1,5 @@
-import { D1Client, ToolLogEntry } from "../client";
-import { generateId, nowISO, hashObject } from "../../../lib/utils";
+import { generateId, hashObject, nowISO } from "../../../lib/utils";
+import type { D1Client, ToolLogEntry } from "../client";
 
 export async function insertToolLog(
   db: D1Client,
@@ -54,18 +54,9 @@ export async function getToolLogs(
     );
   }
 
-  return db.execute<ToolLogEntry>(
-    `SELECT * FROM tool_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    [limit, offset]
-  );
+  return db.execute<ToolLogEntry>(`SELECT * FROM tool_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`, [limit, offset]);
 }
 
-export async function getToolLogsByRequestId(
-  db: D1Client,
-  requestId: string
-): Promise<ToolLogEntry[]> {
-  return db.execute<ToolLogEntry>(
-    `SELECT * FROM tool_logs WHERE request_id = ? ORDER BY created_at ASC`,
-    [requestId]
-  );
+export async function getToolLogsByRequestId(db: D1Client, requestId: string): Promise<ToolLogEntry[]> {
+  return db.execute<ToolLogEntry>(`SELECT * FROM tool_logs WHERE request_id = ? ORDER BY created_at ASC`, [requestId]);
 }

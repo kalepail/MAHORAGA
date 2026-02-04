@@ -1,5 +1,5 @@
-import { D1Client, StructuredEventRow } from "../client";
 import { generateId, nowISO } from "../../../lib/utils";
+import type { D1Client, StructuredEventRow } from "../client";
 
 export interface RawEventRow {
   id: string;
@@ -24,34 +24,17 @@ export async function insertRawEvent(
   await db.run(
     `INSERT OR IGNORE INTO raw_events (id, source, source_id, raw_content, r2_key, ingested_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      params.source,
-      params.source_id,
-      params.raw_content,
-      params.r2_key ?? null,
-      nowISO(),
-    ]
+    [id, params.source, params.source_id, params.raw_content, params.r2_key ?? null, nowISO()]
   );
 
   return id;
 }
 
-export async function getRawEvent(
-  db: D1Client,
-  id: string
-): Promise<RawEventRow | null> {
-  return db.executeOne<RawEventRow>(
-    `SELECT * FROM raw_events WHERE id = ?`,
-    [id]
-  );
+export async function getRawEvent(db: D1Client, id: string): Promise<RawEventRow | null> {
+  return db.executeOne<RawEventRow>(`SELECT * FROM raw_events WHERE id = ?`, [id]);
 }
 
-export async function rawEventExists(
-  db: D1Client,
-  source: string,
-  sourceId: string
-): Promise<boolean> {
+export async function rawEventExists(db: D1Client, source: string, sourceId: string): Promise<boolean> {
   const row = await db.executeOne<{ cnt: number }>(
     `SELECT COUNT(*) as cnt FROM raw_events WHERE source = ? AND source_id = ?`,
     [source, sourceId]
@@ -66,16 +49,13 @@ export async function getRecentRawEvents(
   const { source, limit = 100 } = params;
 
   if (source) {
-    return db.execute<RawEventRow>(
-      `SELECT * FROM raw_events WHERE source = ? ORDER BY ingested_at DESC LIMIT ?`,
-      [source, limit]
-    );
+    return db.execute<RawEventRow>(`SELECT * FROM raw_events WHERE source = ? ORDER BY ingested_at DESC LIMIT ?`, [
+      source,
+      limit,
+    ]);
   }
 
-  return db.execute<RawEventRow>(
-    `SELECT * FROM raw_events ORDER BY ingested_at DESC LIMIT ?`,
-    [limit]
-  );
+  return db.execute<RawEventRow>(`SELECT * FROM raw_events ORDER BY ingested_at DESC LIMIT ?`, [limit]);
 }
 
 export async function insertStructuredEvent(
@@ -111,14 +91,8 @@ export async function insertStructuredEvent(
   return id;
 }
 
-export async function getStructuredEvent(
-  db: D1Client,
-  id: string
-): Promise<StructuredEventRow | null> {
-  return db.executeOne<StructuredEventRow>(
-    `SELECT * FROM structured_events WHERE id = ?`,
-    [id]
-  );
+export async function getStructuredEvent(db: D1Client, id: string): Promise<StructuredEventRow | null> {
+  return db.executeOne<StructuredEventRow>(`SELECT * FROM structured_events WHERE id = ?`, [id]);
 }
 
 export async function queryStructuredEvents(
@@ -163,21 +137,15 @@ export async function markEventValidated(
   validated: boolean,
   errors?: string[]
 ): Promise<void> {
-  await db.run(
-    `UPDATE structured_events SET validated = ?, validation_errors = ? WHERE id = ?`,
-    [validated ? 1 : 0, errors ? JSON.stringify(errors) : null, eventId]
-  );
+  await db.run(`UPDATE structured_events SET validated = ?, validation_errors = ? WHERE id = ?`, [
+    validated ? 1 : 0,
+    errors ? JSON.stringify(errors) : null,
+    eventId,
+  ]);
 }
 
-export async function linkEventToTrade(
-  db: D1Client,
-  eventId: string,
-  tradeId: string
-): Promise<void> {
-  await db.run(
-    `UPDATE structured_events SET trade_id = ? WHERE id = ?`,
-    [tradeId, eventId]
-  );
+export async function linkEventToTrade(db: D1Client, eventId: string, tradeId: string): Promise<void> {
+  await db.run(`UPDATE structured_events SET trade_id = ? WHERE id = ?`, [tradeId, eventId]);
 }
 
 export interface NewsItemRow {
@@ -271,17 +239,9 @@ export interface EventSourceRow {
 }
 
 export async function getActiveEventSources(db: D1Client): Promise<EventSourceRow[]> {
-  return db.execute<EventSourceRow>(
-    `SELECT * FROM event_sources WHERE active = 1`
-  );
+  return db.execute<EventSourceRow>(`SELECT * FROM event_sources WHERE active = 1`);
 }
 
-export async function updateEventSourcePollTime(
-  db: D1Client,
-  sourceId: string
-): Promise<void> {
-  await db.run(
-    `UPDATE event_sources SET last_poll_at = ? WHERE id = ?`,
-    [nowISO(), sourceId]
-  );
+export async function updateEventSourcePollTime(db: D1Client, sourceId: string): Promise<void> {
+  await db.run(`UPDATE event_sources SET last_poll_at = ? WHERE id = ?`, [nowISO(), sourceId]);
 }

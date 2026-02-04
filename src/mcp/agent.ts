@@ -1,43 +1,42 @@
-import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpAgent } from "agents/mcp";
 import { z } from "zod";
 import type { Env } from "../env.d";
-import { createD1Client, D1Client } from "../storage/d1/client";
-import { createAlpacaProviders } from "../providers/alpaca";
-import { getDefaultPolicyConfig, PolicyConfig } from "../policy/config";
-import { getPolicyConfig } from "../storage/d1/queries/policy-config";
-import { generateId } from "../lib/utils";
-import { success, failure } from "./types";
 import { ErrorCode } from "../lib/errors";
-import { insertToolLog } from "../storage/d1/queries/tool-logs";
-import { getRiskState, enableKillSwitch, disableKillSwitch } from "../storage/d1/queries/risk-state";
+import { generateId, hmacVerify } from "../lib/utils";
+import { consumeApprovalToken, generateApprovalToken, validateApprovalToken } from "../policy/approval";
+import { getDefaultPolicyConfig, type PolicyConfig } from "../policy/config";
 import { PolicyEngine } from "../policy/engine";
-import { generateApprovalToken, validateApprovalToken, consumeApprovalToken } from "../policy/approval";
-import { createTrade } from "../storage/d1/queries/trades";
-import { hmacVerify } from "../lib/utils";
+import { createAlpacaProviders } from "../providers/alpaca";
+import { getDTE } from "../providers/alpaca/options";
+import { classifyEvent, generateResearchReport, summarizeLearnedRules } from "../providers/llm/classifier";
+import { createLLMProvider } from "../providers/llm/factory";
+import { extractFinancialData, isAllowedDomain, scrapeUrl } from "../providers/scraper";
+import { computeTechnicals, detectSignals, type Signal, type TechnicalIndicators } from "../providers/technicals";
+import type { LLMProvider, OptionsProvider } from "../providers/types";
+import { createD1Client, type D1Client } from "../storage/d1/client";
 import {
-  createJournalEntry,
-  logOutcome,
-  queryJournal,
-  getJournalStats,
-  getActiveRules,
-  getPreferences,
-  setPreferences,
-} from "../storage/d1/queries/memory";
-import {
+  insertNewsItem,
   insertRawEvent,
   insertStructuredEvent,
-  queryStructuredEvents,
   queryNewsItems,
-  insertNewsItem,
+  queryStructuredEvents,
 } from "../storage/d1/queries/events";
-import { computeTechnicals, detectSignals, type TechnicalIndicators, type Signal } from "../providers/technicals";
-import { scrapeUrl, extractFinancialData, isAllowedDomain } from "../providers/scraper";
-import { createLLMProvider } from "../providers/llm/factory";
-import { classifyEvent, generateResearchReport, summarizeLearnedRules } from "../providers/llm/classifier";
-import { getDTE } from "../providers/alpaca/options";
-import type { LLMProvider, OptionsProvider } from "../providers/types";
+import {
+  createJournalEntry,
+  getActiveRules,
+  getJournalStats,
+  getPreferences,
+  logOutcome,
+  queryJournal,
+  setPreferences,
+} from "../storage/d1/queries/memory";
+import { getPolicyConfig } from "../storage/d1/queries/policy-config";
+import { disableKillSwitch, enableKillSwitch, getRiskState } from "../storage/d1/queries/risk-state";
+import { insertToolLog } from "../storage/d1/queries/tool-logs";
+import { createTrade } from "../storage/d1/queries/trades";
 import type { OptionsOrderPreview } from "./types";
+import { failure, success } from "./types";
 
 export class MahoragaMcpAgent extends McpAgent<Env> {
   server = new McpServer({
@@ -82,63 +81,61 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
   }
 
   private registerAuthTools(db: ReturnType<typeof createD1Client>, alpaca: ReturnType<typeof createAlpacaProviders>) {
-    this.server.tool(
-      "auth-verify",
-      "Verify that Alpaca API credentials are valid",
-      {},
-      async () => {
-        const startTime = Date.now();
-        try {
-          const account = await alpaca.trading.getAccount();
-          const result = success({
-            verified: true,
-            account_id: account.id,
-            account_number: account.account_number,
-            status: account.status,
-            paper: this.env.ALPACA_PAPER === "true",
-          });
-          await insertToolLog(db, {
-            request_id: this.requestId,
-            tool_name: "auth-verify",
-            input: {},
-            output: result,
-            latency_ms: Date.now() - startTime,
-            provider_calls: 1,
-          });
-          return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-        } catch (error) {
-          return {
-            content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.UNAUTHORIZED, message: String(error) }), null, 2) }],
-            isError: true,
-          };
-        }
-      }
-    );
-
-    this.server.tool(
-      "user-get",
-      "Get user/session information and system configuration",
-      {},
-      async () => {
+    this.server.tool("auth-verify", "Verify that Alpaca API credentials are valid", {}, async () => {
+      const startTime = Date.now();
+      try {
+        const account = await alpaca.trading.getAccount();
         const result = success({
-          environment: this.env.ENVIRONMENT,
-          paper_trading: this.env.ALPACA_PAPER === "true",
-          features: {
-            llm_research: this.env.FEATURE_LLM_RESEARCH === "true",
-            options: this.env.FEATURE_OPTIONS === "true",
-          },
-          policy: {
-            max_position_pct_equity: this.policyConfig!.max_position_pct_equity,
-            max_notional_per_trade: this.policyConfig!.max_notional_per_trade,
-            max_daily_loss_pct: this.policyConfig!.max_daily_loss_pct,
-          },
+          verified: true,
+          account_id: account.id,
+          account_number: account.account_number,
+          status: account.status,
+          paper: this.env.ALPACA_PAPER === "true",
+        });
+        await insertToolLog(db, {
+          request_id: this.requestId,
+          tool_name: "auth-verify",
+          input: {},
+          output: result,
+          latency_ms: Date.now() - startTime,
+          provider_calls: 1,
         });
         return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(failure({ code: ErrorCode.UNAUTHORIZED, message: String(error) }), null, 2),
+            },
+          ],
+          isError: true,
+        };
       }
-    );
+    });
+
+    this.server.tool("user-get", "Get user/session information and system configuration", {}, async () => {
+      const result = success({
+        environment: this.env.ENVIRONMENT,
+        paper_trading: this.env.ALPACA_PAPER === "true",
+        features: {
+          llm_research: this.env.FEATURE_LLM_RESEARCH === "true",
+          options: this.env.FEATURE_OPTIONS === "true",
+        },
+        policy: {
+          max_position_pct_equity: this.policyConfig!.max_position_pct_equity,
+          max_notional_per_trade: this.policyConfig!.max_notional_per_trade,
+          max_daily_loss_pct: this.policyConfig!.max_daily_loss_pct,
+        },
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    });
   }
 
-  private registerAccountTools(db: ReturnType<typeof createD1Client>, alpaca: ReturnType<typeof createAlpacaProviders>) {
+  private registerAccountTools(
+    db: ReturnType<typeof createD1Client>,
+    alpaca: ReturnType<typeof createAlpacaProviders>
+  ) {
     this.server.tool(
       "accounts-get",
       "Get detailed account information including buying power and equity",
@@ -159,7 +156,12 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
             isError: true,
           };
         }
@@ -217,7 +219,12 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
             isError: true,
           };
         }
@@ -225,7 +232,10 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
     );
   }
 
-  private registerPositionTools(db: ReturnType<typeof createD1Client>, alpaca: ReturnType<typeof createAlpacaProviders>) {
+  private registerPositionTools(
+    db: ReturnType<typeof createD1Client>,
+    alpaca: ReturnType<typeof createAlpacaProviders>
+  ) {
     this.server.tool(
       "positions-list",
       "List all current positions",
@@ -252,7 +262,12 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
             isError: true,
           };
         }
@@ -272,18 +287,38 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           const riskState = await getRiskState(db);
           if (riskState.kill_switch_active) {
             return {
-              content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.KILL_SWITCH_ACTIVE, message: riskState.kill_switch_reason ?? "Kill switch active" }), null, 2) }],
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({
+                      code: ErrorCode.KILL_SWITCH_ACTIVE,
+                      message: riskState.kill_switch_reason ?? "Kill switch active",
+                    }),
+                    null,
+                    2
+                  ),
+                },
+              ],
               isError: true,
             };
           }
 
           const order = await alpaca.trading.closePosition(symbol, qty, percentage ? percentage / 100 : undefined);
-          const result = success({ message: `Position close order submitted`, order: { id: order.id, symbol: order.symbol, status: order.status } });
+          const result = success({
+            message: `Position close order submitted`,
+            order: { id: order.id, symbol: order.symbol, status: order.status },
+          });
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
             isError: true,
           };
         }
@@ -309,7 +344,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         const startTime = Date.now();
         try {
           if (!input.qty && !input.notional) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_INPUT, message: "Either qty or notional required" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_INPUT, message: "Either qty or notional required" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const [account, positions, clock, riskState] = await Promise.all([
@@ -324,7 +371,9 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             try {
               const quote = await alpaca.marketData.getQuote(input.symbol);
               estimatedPrice = input.side === "buy" ? quote.ask_price : quote.bid_price;
-            } catch { estimatedPrice = 0; }
+            } catch {
+              estimatedPrice = 0;
+            }
           }
 
           const estimatedCost = input.notional ?? (input.qty ?? 0) * estimatedPrice;
@@ -389,7 +438,15 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -403,19 +460,58 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         try {
           const riskState = await getRiskState(db);
           if (riskState.kill_switch_active) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.KILL_SWITCH_ACTIVE, message: riskState.kill_switch_reason ?? "Kill switch active" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({
+                      code: ErrorCode.KILL_SWITCH_ACTIVE,
+                      message: riskState.kill_switch_reason ?? "Kill switch active",
+                    }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
-          const validation = await validateApprovalToken({ token: approval_token, secret: this.env.KILL_SWITCH_SECRET, db });
+          const validation = await validateApprovalToken({
+            token: approval_token,
+            secret: this.env.KILL_SWITCH_SECRET,
+            db,
+          });
           if (!validation.valid) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_APPROVAL_TOKEN, message: validation.reason ?? "Invalid token" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_APPROVAL_TOKEN, message: validation.reason ?? "Invalid token" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const orderParams = validation.order_params!;
           const clock = await alpaca.trading.getClock();
           const isCrypto = orderParams.asset_class === "crypto";
           if (!isCrypto && !clock.is_open && orderParams.time_in_force === "day") {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.MARKET_CLOSED, message: "Market closed" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(failure({ code: ErrorCode.MARKET_CLOSED, message: "Market closed" }), null, 2),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const order = await alpaca.trading.createOrder({
@@ -442,7 +538,10 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             status: order.status,
           });
 
-          const result = success({ message: "Order submitted", order: { id: order.id, symbol: order.symbol, status: order.status } });
+          const result = success({
+            message: "Order submitted",
+            order: { id: order.id, symbol: order.symbol, status: order.status },
+          });
 
           await insertToolLog(db, {
             request_id: this.requestId,
@@ -455,7 +554,15 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -484,56 +591,81 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           });
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
 
-    this.server.tool(
-      "orders-cancel",
-      "Cancel an order by ID",
-      { order_id: z.string() },
-      async ({ order_id }) => {
-        try {
-          await alpaca.trading.cancelOrder(order_id);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ message: `Order ${order_id} cancelled` }), null, 2) }] };
-        } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
-        }
+    this.server.tool("orders-cancel", "Cancel an order by ID", { order_id: z.string() }, async ({ order_id }) => {
+      try {
+        await alpaca.trading.cancelOrder(order_id);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(success({ message: `Order ${order_id} cancelled` }), null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+            },
+          ],
+          isError: true,
+        };
       }
-    );
+    });
   }
 
   private registerRiskTools(db: ReturnType<typeof createD1Client>, alpaca: ReturnType<typeof createAlpacaProviders>) {
-    this.server.tool(
-      "risk-status",
-      "Get current risk status and limits",
-      {},
-      async () => {
-        try {
-          const [riskState, account, positions] = await Promise.all([
-            getRiskState(db),
-            alpaca.trading.getAccount(),
-            alpaca.trading.getPositions(),
-          ]);
+    this.server.tool("risk-status", "Get current risk status and limits", {}, async () => {
+      try {
+        const [riskState, account, positions] = await Promise.all([
+          getRiskState(db),
+          alpaca.trading.getAccount(),
+          alpaca.trading.getPositions(),
+        ]);
 
-          const totalExposure = positions.reduce((sum, p) => sum + Math.abs(p.market_value), 0);
-          const dailyLossPct = riskState.daily_loss_usd / account.equity;
+        const totalExposure = positions.reduce((sum, p) => sum + Math.abs(p.market_value), 0);
+        const dailyLossPct = riskState.daily_loss_usd / account.equity;
 
-          const result = success({
-            kill_switch: { active: riskState.kill_switch_active, reason: riskState.kill_switch_reason },
-            daily_loss: { usd: riskState.daily_loss_usd, pct: dailyLossPct, limit_pct: this.policyConfig!.max_daily_loss_pct },
-            cooldown: { active: riskState.cooldown_until ? new Date(riskState.cooldown_until) > new Date() : false },
-            exposure: { total_usd: totalExposure, position_count: positions.length },
-            limits: this.policyConfig,
-          });
+        const result = success({
+          kill_switch: { active: riskState.kill_switch_active, reason: riskState.kill_switch_reason },
+          daily_loss: {
+            usd: riskState.daily_loss_usd,
+            pct: dailyLossPct,
+            limit_pct: this.policyConfig!.max_daily_loss_pct,
+          },
+          cooldown: { active: riskState.cooldown_until ? new Date(riskState.cooldown_until) > new Date() : false },
+          exposure: { total_usd: totalExposure, position_count: positions.length },
+          limits: this.policyConfig,
+        });
 
-          return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-        } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
-        }
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+            },
+          ],
+          isError: true,
+        };
       }
-    );
+    });
 
     this.server.tool(
       "kill-switch-enable",
@@ -543,9 +675,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         try {
           await enableKillSwitch(db, reason);
           await alpaca.trading.cancelAllOrders();
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ message: "Kill switch enabled", reason }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ message: "Kill switch enabled", reason }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -560,60 +707,103 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ confirmation, secret_hash }) => {
         try {
           if (confirmation !== "CONFIRM_RESUME_TRADING") {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_INPUT, message: "Type 'CONFIRM_RESUME_TRADING'" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_INPUT, message: "Type 'CONFIRM_RESUME_TRADING'" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
           const isValid = await hmacVerify("DISABLE_KILL_SWITCH", secret_hash, this.env.KILL_SWITCH_SECRET);
           if (!isValid) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.UNAUTHORIZED, message: "Invalid secret" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(failure({ code: ErrorCode.UNAUTHORIZED, message: "Invalid secret" }), null, 2),
+                },
+              ],
+              isError: true,
+            };
           }
           await disableKillSwitch(db);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ message: "Kill switch disabled" }), null, 2) }] };
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(success({ message: "Kill switch disabled" }), null, 2) },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
   }
 
   private registerUtilityTools() {
-    this.server.tool(
-      "help-usage",
-      "Get help information about using Mahoraga",
-      {},
-      async () => {
-        const result = success({
-          name: "Mahoraga MCP Trading Server",
-          version: "0.1.0",
-          order_flow: ["1. orders-preview -> get approval_token", "2. orders-submit with token"],
-          quick_start: ["auth-verify", "portfolio-get", "risk-status", "orders-preview", "orders-submit"],
-        });
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-      }
-    );
+    this.server.tool("help-usage", "Get help information about using Mahoraga", {}, async () => {
+      const result = success({
+        name: "Mahoraga MCP Trading Server",
+        version: "0.1.0",
+        order_flow: ["1. orders-preview -> get approval_token", "2. orders-submit with token"],
+        quick_start: ["auth-verify", "portfolio-get", "risk-status", "orders-preview", "orders-submit"],
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    });
 
-    this.server.tool(
-      "catalog-list",
-      "List all available tools",
-      {},
-      async () => {
-        const catalog = [
-          { category: "Auth", tools: ["auth-verify", "user-get"] },
-          { category: "Account", tools: ["accounts-get", "portfolio-get"] },
-          { category: "Positions", tools: ["positions-list", "positions-close"] },
-          { category: "Orders", tools: ["orders-preview", "orders-submit", "orders-list", "orders-cancel"] },
-          { category: "Risk", tools: ["risk-status", "kill-switch-enable", "kill-switch-disable"] },
-          { category: "Memory", tools: ["memory-log-trade", "memory-log-outcome", "memory-query", "memory-summarize", "memory-set-preferences"] },
-          { category: "Market Data", tools: ["symbol-overview", "prices-bars", "market-clock", "market-movers", "market-quote"] },
-          { category: "Technicals", tools: ["technicals-get", "signals-get", "signals-batch"] },
-          { category: "Events", tools: ["events-ingest", "events-list", "events-classify"] },
-          { category: "News", tools: ["news-list", "news-index"] },
-          { category: "Research", tools: ["symbol-research", "web-scrape-financial"] },
-          { category: "Options", tools: ["options-expirations", "options-chain", "options-snapshot", "options-order-preview", "options-order-submit"] },
-          { category: "Utility", tools: ["help-usage", "catalog-list"] },
-        ];
-        return { content: [{ type: "text" as const, text: JSON.stringify(success({ catalog }), null, 2) }] };
-      }
-    );
+    this.server.tool("catalog-list", "List all available tools", {}, async () => {
+      const catalog = [
+        { category: "Auth", tools: ["auth-verify", "user-get"] },
+        { category: "Account", tools: ["accounts-get", "portfolio-get"] },
+        { category: "Positions", tools: ["positions-list", "positions-close"] },
+        { category: "Orders", tools: ["orders-preview", "orders-submit", "orders-list", "orders-cancel"] },
+        { category: "Risk", tools: ["risk-status", "kill-switch-enable", "kill-switch-disable"] },
+        {
+          category: "Memory",
+          tools: [
+            "memory-log-trade",
+            "memory-log-outcome",
+            "memory-query",
+            "memory-summarize",
+            "memory-set-preferences",
+          ],
+        },
+        {
+          category: "Market Data",
+          tools: ["symbol-overview", "prices-bars", "market-clock", "market-movers", "market-quote"],
+        },
+        { category: "Technicals", tools: ["technicals-get", "signals-get", "signals-batch"] },
+        { category: "Events", tools: ["events-ingest", "events-list", "events-classify"] },
+        { category: "News", tools: ["news-list", "news-index"] },
+        { category: "Research", tools: ["symbol-research", "web-scrape-financial"] },
+        {
+          category: "Options",
+          tools: [
+            "options-expirations",
+            "options-chain",
+            "options-snapshot",
+            "options-order-preview",
+            "options-order-submit",
+          ],
+        },
+        { category: "Utility", tools: ["help-usage", "catalog-list"] },
+      ];
+      return { content: [{ type: "text" as const, text: JSON.stringify(success({ catalog }), null, 2) }] };
+    });
   }
 
   private registerMemoryTools(db: D1Client) {
@@ -644,9 +834,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             regime_tags: input.regime_tags,
             notes: input.notes,
           });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ journal_id: journalId, message: "Trade logged" }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ journal_id: journalId, message: "Trade logged" }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -674,9 +879,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             outcome: input.outcome,
             lessons_learned: input.lessons_learned,
           });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ message: "Outcome logged" }), null, 2) }] };
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(success({ message: "Outcome logged" }), null, 2) }],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -694,13 +909,33 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async (input) => {
         try {
           const [entries, stats, rules] = await Promise.all([
-            queryJournal(db, { symbol: input.symbol, outcome: input.outcome, regime_tag: input.regime_tag, limit: input.limit }),
+            queryJournal(db, {
+              symbol: input.symbol,
+              outcome: input.outcome,
+              regime_tag: input.regime_tag,
+              limit: input.limit,
+            }),
             getJournalStats(db, { symbol: input.symbol, days: input.days }),
             getActiveRules(db),
           ]);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ entries, stats, active_rules: rules.length }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ entries, stats, active_rules: rules.length }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -711,7 +946,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       { days: z.number().min(1).max(365).default(30) },
       async (_input) => {
         if (!this.llm) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const entries = await queryJournal(db, { limit: 50 });
@@ -725,9 +972,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             notes: e.notes ?? "",
           }));
           const summary = await summarizeLearnedRules(this.llm, mapped);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ summary, entries_analyzed: entries.length }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ summary, entries_analyzed: entries.length }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -739,26 +1001,41 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ preferences }) => {
         try {
           await setPreferences(db, preferences);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ message: "Preferences saved" }), null, 2) }] };
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(success({ message: "Preferences saved" }), null, 2) },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
 
-    this.server.tool(
-      "memory-get-preferences",
-      "Get stored user trading preferences",
-      {},
-      async () => {
-        try {
-          const preferences = await getPreferences(db);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ preferences }), null, 2) }] };
-        } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
-        }
+    this.server.tool("memory-get-preferences", "Get stored user trading preferences", {}, async () => {
+      try {
+        const preferences = await getPreferences(db);
+        return { content: [{ type: "text" as const, text: JSON.stringify(success({ preferences }), null, 2) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+            },
+          ],
+          isError: true,
+        };
       }
-    );
+    });
   }
 
   private registerMarketDataTools(db: D1Client, alpaca: ReturnType<typeof createAlpacaProviders>) {
@@ -787,7 +1064,9 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             change_pct: ((snapshot.daily_bar.c - snapshot.prev_daily_bar.c) / snapshot.prev_daily_bar.c) * 100,
             volume: snapshot.daily_bar.v,
             recent_bars: bars.slice(-5),
-            position: position ? { qty: position.qty, unrealized_pl: position.unrealized_pl, avg_entry: position.avg_entry_price } : null,
+            position: position
+              ? { qty: position.qty, unrealized_pl: position.unrealized_pl, avg_entry: position.avg_entry_price }
+              : null,
           });
 
           await insertToolLog(db, {
@@ -801,7 +1080,15 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -817,26 +1104,48 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ symbol, timeframe, limit }) => {
         try {
           const bars = await alpaca.marketData.getBars(symbol.toUpperCase(), timeframe, { limit });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ symbol: symbol.toUpperCase(), timeframe, count: bars.length, bars }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  success({ symbol: symbol.toUpperCase(), timeframe, count: bars.length, bars }),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
 
-    this.server.tool(
-      "market-clock",
-      "Get current market clock status",
-      {},
-      async () => {
-        try {
-          const clock = await alpaca.trading.getClock();
-          return { content: [{ type: "text" as const, text: JSON.stringify(success(clock), null, 2) }] };
-        } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
-        }
+    this.server.tool("market-clock", "Get current market clock status", {}, async () => {
+      try {
+        const clock = await alpaca.trading.getClock();
+        return { content: [{ type: "text" as const, text: JSON.stringify(success(clock), null, 2) }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+            },
+          ],
+          isError: true,
+        };
       }
-    );
+    });
 
     this.server.tool(
       "market-movers",
@@ -853,10 +1162,21 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           }));
           movers.sort((a, b) => b.change_pct - a.change_pct);
           const gainers = movers.filter((m) => m.change_pct > 0).slice(0, 10);
-          const losers = movers.filter((m) => m.change_pct < 0).sort((a, b) => a.change_pct - b.change_pct).slice(0, 10);
+          const losers = movers
+            .filter((m) => m.change_pct < 0)
+            .sort((a, b) => a.change_pct - b.change_pct)
+            .slice(0, 10);
           return { content: [{ type: "text" as const, text: JSON.stringify(success({ gainers, losers }), null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -868,9 +1188,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ symbols }) => {
         try {
           const quotes = await alpaca.marketData.getQuotes(symbols.map((s) => s.toUpperCase()));
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ count: Object.keys(quotes).length, quotes }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ count: Object.keys(quotes).length, quotes }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -886,7 +1221,9 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             try {
               const asset = await alpaca.trading.getAsset(symbol);
               isCrypto = asset?.class === "crypto";
-            } catch { /* fallback to symbol pattern */ }
+            } catch {
+              /* fallback to symbol pattern */
+            }
           }
           const snapshot = isCrypto
             ? await alpaca.marketData.getCryptoSnapshot(symbol)
@@ -903,7 +1240,15 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
           });
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -921,12 +1266,32 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         try {
           const bars = await alpaca.marketData.getBars(symbol.toUpperCase(), timeframe, { limit: 250 });
           if (bars.length < 20) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_INPUT, message: "Insufficient data for technical analysis" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_INPUT, message: "Insufficient data for technical analysis" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
           const technicals = computeTechnicals(symbol.toUpperCase(), bars);
           return { content: [{ type: "text" as const, text: JSON.stringify(success(technicals), null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -942,13 +1307,44 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         try {
           const bars = await alpaca.marketData.getBars(symbol.toUpperCase(), timeframe, { limit: 250 });
           if (bars.length < 20) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_INPUT, message: "Insufficient data for signal detection" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_INPUT, message: "Insufficient data for signal detection" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
           const technicals = computeTechnicals(symbol.toUpperCase(), bars);
           const signals = detectSignals(technicals);
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ symbol: symbol.toUpperCase(), timeframe, technicals, signals }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  success({ symbol: symbol.toUpperCase(), timeframe, technicals, signals }),
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -972,14 +1368,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
                 const signals = detectSignals(technicals);
                 results.push({ symbol: sym.toUpperCase(), technicals, signals });
               }
-            } catch {
-              continue;
-            }
+            } catch {}
           }
 
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ count: results.length, results }), null, 2) }] };
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(success({ count: results.length, results }), null, 2) },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -997,9 +1403,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ source, source_id, content }) => {
         try {
           const eventId = await insertRawEvent(db, { source, source_id, raw_content: content });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ event_id: eventId, message: "Event ingested" }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ event_id: eventId, message: "Event ingested" }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1021,9 +1442,21 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             validated: input.validated,
             limit: input.limit,
           });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ count: events.length, events }), null, 2) }] };
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(success({ count: events.length, events }), null, 2) },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1037,7 +1470,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       },
       async ({ content, store }) => {
         if (!this.llm) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const classified = await classifyEvent(this.llm, content);
@@ -1053,9 +1498,21 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             });
           }
 
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ ...classified, event_id: eventId }), null, 2) }] };
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(success({ ...classified, event_id: eventId }), null, 2) },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1077,9 +1534,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             source: input.source,
             limit: input.limit,
           });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ count: news.length, news }), null, 2) }] };
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(success({ count: news.length, news }), null, 2) }],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1107,9 +1574,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             symbols: input.symbols.map((s) => s.toUpperCase()),
             published_at: input.published_at,
           });
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ news_id: newsId, message: "News indexed" }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ news_id: newsId, message: "News indexed" }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1123,7 +1605,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       async ({ symbol }) => {
         const startTime = Date.now();
         if (!this.llm) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "LLM feature not enabled" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const [snapshot, bars, positions, news] = await Promise.all([
@@ -1156,9 +1650,24 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             provider_calls: 5,
           });
 
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ symbol: symbol.toUpperCase(), report }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ symbol: symbol.toUpperCase(), report }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1172,14 +1681,41 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       },
       async ({ url, symbol }) => {
         if (!isAllowedDomain(url)) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.FORBIDDEN, message: "Domain not in allowlist" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.FORBIDDEN, message: "Domain not in allowlist" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const scraped = await scrapeUrl(url);
           const financialData = symbol ? extractFinancialData(scraped.text, symbol) : null;
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ ...scraped, financial_data: financialData }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ ...scraped, financial_data: financialData }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1192,13 +1728,40 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       { underlying: z.string().min(1) },
       async ({ underlying }) => {
         if (!this.options || !this.options.isConfigured()) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const expirations = await this.options.getExpirations(underlying.toUpperCase());
-          return { content: [{ type: "text" as const, text: JSON.stringify(success({ underlying: underlying.toUpperCase(), expirations }), null, 2) }] };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(success({ underlying: underlying.toUpperCase(), expirations }), null, 2),
+              },
+            ],
+          };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1212,13 +1775,33 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       },
       async ({ underlying, expiration }) => {
         if (!this.options || !this.options.isConfigured()) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const chain = await this.options.getChain(underlying.toUpperCase(), expiration);
           return { content: [{ type: "text" as const, text: JSON.stringify(success(chain), null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1229,13 +1812,33 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
       { contract_symbol: z.string().min(1) },
       async ({ contract_symbol }) => {
         if (!this.options || !this.options.isConfigured()) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
         try {
           const snapshot = await this.options.getSnapshot(contract_symbol);
           return { content: [{ type: "text" as const, text: JSON.stringify(success(snapshot), null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1257,7 +1860,19 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         const alpaca = createAlpacaProviders(this.env);
 
         if (!this.options || !this.options.isConfigured()) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  failure({ code: ErrorCode.NOT_SUPPORTED, message: "Options provider not configured" }),
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
         }
 
         try {
@@ -1271,11 +1886,25 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           const contractParts = this.parseOptionsSymbol(input.contract_symbol);
           if (!contractParts) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_INPUT, message: "Invalid options contract symbol" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_INPUT, message: "Invalid options contract symbol" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const dte = getDTE(contractParts.expiration);
-          const estimatedPremium = input.limit_price ?? (input.side === "buy" ? snapshot.latest_quote.ask_price : snapshot.latest_quote.bid_price);
+          const estimatedPremium =
+            input.limit_price ??
+            (input.side === "buy" ? snapshot.latest_quote.ask_price : snapshot.latest_quote.bid_price);
           const estimatedCost = input.qty * estimatedPremium * 100;
 
           const preview: OptionsOrderPreview = {
@@ -1327,7 +1956,12 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             policyResult.expires_at = approval.expires_at;
           }
 
-          const result = success({ preview, policy: policyResult, greeks: snapshot.greeks, iv: snapshot.implied_volatility });
+          const result = success({
+            preview,
+            policy: policyResult,
+            greeks: snapshot.greeks,
+            iv: snapshot.implied_volatility,
+          });
 
           await insertToolLog(db, {
             request_id: this.requestId,
@@ -1340,7 +1974,15 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.INTERNAL_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
@@ -1357,19 +1999,58 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
         try {
           const riskState = await getRiskState(db);
           if (riskState.kill_switch_active) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.KILL_SWITCH_ACTIVE, message: riskState.kill_switch_reason ?? "Kill switch active" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({
+                      code: ErrorCode.KILL_SWITCH_ACTIVE,
+                      message: riskState.kill_switch_reason ?? "Kill switch active",
+                    }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
-          const validation = await validateApprovalToken({ token: approval_token, secret: this.env.KILL_SWITCH_SECRET, db });
+          const validation = await validateApprovalToken({
+            token: approval_token,
+            secret: this.env.KILL_SWITCH_SECRET,
+            db,
+          });
           if (!validation.valid) {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.INVALID_APPROVAL_TOKEN, message: validation.reason ?? "Invalid token" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(
+                    failure({ code: ErrorCode.INVALID_APPROVAL_TOKEN, message: validation.reason ?? "Invalid token" }),
+                    null,
+                    2
+                  ),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const orderParams = validation.order_params!;
           const clock = await alpaca.trading.getClock();
           const isCrypto = orderParams.asset_class === "crypto";
           if (!isCrypto && !clock.is_open && orderParams.time_in_force === "day") {
-            return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.MARKET_CLOSED, message: "Market closed" }), null, 2) }], isError: true };
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify(failure({ code: ErrorCode.MARKET_CLOSED, message: "Market closed" }), null, 2),
+                },
+              ],
+              isError: true,
+            };
           }
 
           const order = await alpaca.trading.createOrder({
@@ -1393,7 +2074,10 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
             status: order.status,
           });
 
-          const result = success({ message: "Options order submitted", order: { id: order.id, symbol: order.symbol, status: order.status } });
+          const result = success({
+            message: "Options order submitted",
+            order: { id: order.id, symbol: order.symbol, status: order.status },
+          });
 
           await insertToolLog(db, {
             request_id: this.requestId,
@@ -1406,13 +2090,23 @@ export class MahoragaMcpAgent extends McpAgent<Env> {
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2) }], isError: true };
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(failure({ code: ErrorCode.PROVIDER_ERROR, message: String(error) }), null, 2),
+              },
+            ],
+            isError: true,
+          };
         }
       }
     );
   }
 
-  private parseOptionsSymbol(symbol: string): { underlying: string; expiration: string; type: "call" | "put"; strike: number } | null {
+  private parseOptionsSymbol(
+    symbol: string
+  ): { underlying: string; expiration: string; type: "call" | "put"; strike: number } | null {
     const match = symbol.match(/^([A-Z]+)(\d{6})([CP])(\d+)$/);
     if (!match) return null;
 

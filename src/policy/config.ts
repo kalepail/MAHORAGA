@@ -1,5 +1,5 @@
-import { parseNumber } from "../lib/utils";
 import type { Env } from "../env.d";
+import { parseNumber } from "../lib/utils";
 
 export type OptionsStrategy = "long_call" | "long_put";
 
@@ -52,15 +52,15 @@ export function getDefaultOptionsPolicyConfig(): OptionsPolicyConfig {
   return {
     options_enabled: false,
     max_pct_per_option_trade: 0.02,
-    max_total_options_exposure_pct: 0.10,
+    max_total_options_exposure_pct: 0.1,
     min_dte: 30,
     max_dte: 60,
-    min_delta: 0.30,
-    max_delta: 0.70,
+    min_delta: 0.3,
+    max_delta: 0.7,
     allowed_strategies: ["long_call", "long_put"],
     no_averaging_down: true,
     max_option_positions: 3,
-    min_confidence_for_options: 0.80,
+    min_confidence_for_options: 0.8,
   };
 }
 
@@ -92,11 +92,19 @@ export function validateOptionsPolicyConfig(config: unknown): OptionsPolicyConfi
     throw new Error("options.options_enabled must be a boolean");
   }
 
-  if (typeof c.max_pct_per_option_trade !== "number" || c.max_pct_per_option_trade <= 0 || c.max_pct_per_option_trade > 0.1) {
+  if (
+    typeof c.max_pct_per_option_trade !== "number" ||
+    c.max_pct_per_option_trade <= 0 ||
+    c.max_pct_per_option_trade > 0.1
+  ) {
     throw new Error("options.max_pct_per_option_trade must be between 0 and 0.1 (10%)");
   }
 
-  if (typeof c.max_total_options_exposure_pct !== "number" || c.max_total_options_exposure_pct <= 0 || c.max_total_options_exposure_pct > 0.25) {
+  if (
+    typeof c.max_total_options_exposure_pct !== "number" ||
+    c.max_total_options_exposure_pct <= 0 ||
+    c.max_total_options_exposure_pct > 0.25
+  ) {
     throw new Error("options.max_total_options_exposure_pct must be between 0 and 0.25 (25%)");
   }
 
@@ -134,7 +142,11 @@ export function validateOptionsPolicyConfig(config: unknown): OptionsPolicyConfi
     throw new Error("options.max_option_positions must be between 1 and 10");
   }
 
-  if (typeof c.min_confidence_for_options !== "number" || c.min_confidence_for_options < 0.5 || c.min_confidence_for_options > 1) {
+  if (
+    typeof c.min_confidence_for_options !== "number" ||
+    c.min_confidence_for_options < 0.5 ||
+    c.min_confidence_for_options > 1
+  ) {
     throw new Error("options.min_confidence_for_options must be between 0.5 and 1");
   }
 
@@ -144,7 +156,11 @@ export function validateOptionsPolicyConfig(config: unknown): OptionsPolicyConfi
 export function validatePolicyConfig(config: unknown): PolicyConfig {
   const c = config as Record<string, unknown>;
 
-  if (typeof c.max_position_pct_equity !== "number" || c.max_position_pct_equity <= 0 || c.max_position_pct_equity > 1) {
+  if (
+    typeof c.max_position_pct_equity !== "number" ||
+    c.max_position_pct_equity <= 0 ||
+    c.max_position_pct_equity > 1
+  ) {
     throw new Error("max_position_pct_equity must be between 0 and 1");
   }
 

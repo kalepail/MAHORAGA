@@ -1,5 +1,5 @@
 import { createError, ErrorCode } from "../../lib/errors";
-import type { LLMProvider, CompletionParams, CompletionResult } from "../types";
+import type { CompletionParams, CompletionResult, LLMProvider } from "../types";
 
 export interface CloudflareGatewayConfig {
   /** Cloudflare account ID (used in gateway URL) */
@@ -34,10 +34,13 @@ function normalizeCloudflareCompatModel(model: string): string {
   const rest = model.slice(idx + 1);
 
   const mappedProvider =
-    provider === "google" ? "google-ai-studio" :
-      provider === "xai" ? "grok" :
-        provider === "workersai" ? "workers-ai" :
-          provider;
+    provider === "google"
+      ? "google-ai-studio"
+      : provider === "xai"
+        ? "grok"
+        : provider === "workersai"
+          ? "workers-ai"
+          : provider;
 
   // Cloudflare /compat docs show Anthropic versions with hyphens (e.g., ...-4-5),
   // while some configs may use dots (e.g., ...-4.5).
@@ -102,18 +105,12 @@ export class CloudflareGatewayProvider implements LLMProvider {
         body: JSON.stringify(body),
       });
     } catch (error) {
-      throw createError(
-        ErrorCode.PROVIDER_ERROR,
-        `Cloudflare AI Gateway network error: ${String(error)}`
-      );
+      throw createError(ErrorCode.PROVIDER_ERROR, `Cloudflare AI Gateway network error: ${String(error)}`);
     }
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      throw createError(
-        ErrorCode.PROVIDER_ERROR,
-        `Cloudflare AI Gateway error (${response.status}): ${errorText}`
-      );
+      throw createError(ErrorCode.PROVIDER_ERROR, `Cloudflare AI Gateway error (${response.status}): ${errorText}`);
     }
 
     const data = (await response.json()) as OpenAICompatResponse;
@@ -133,4 +130,3 @@ export class CloudflareGatewayProvider implements LLMProvider {
 export function createCloudflareGatewayProvider(config: CloudflareGatewayConfig): CloudflareGatewayProvider {
   return new CloudflareGatewayProvider(config);
 }
-

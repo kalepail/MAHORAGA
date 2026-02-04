@@ -81,32 +81,19 @@ function getSentimentColor(score: number): string {
   return 'text-hud-warning'
 }
 
-// Generate mock portfolio history for demo (will be replaced by real data from API)
-function generateMockPortfolioHistory(equity: number, points: number = 24): PortfolioSnapshot[] {
-  const history: PortfolioSnapshot[] = []
-  const now = Date.now()
-  const interval = 3600000 // 1 hour in ms
-  let value = equity * 0.95 // Start slightly lower
-  
-  for (let i = points; i >= 0; i--) {
-    const change = (Math.random() - 0.45) * equity * 0.005 // Small random walk with slight upward bias
-    value = Math.max(value + change, equity * 0.8)
-    const pl = value - equity * 0.95
-    history.push({
-      timestamp: now - i * interval,
-      equity: value,
-      pl,
-      pl_pct: (pl / (equity * 0.95)) * 100,
-    })
+async function fetchPortfolioHistory(period: string = '1D'): Promise<PortfolioSnapshot[]> {
+  try {
+    const timeframe = period === '1D' ? '15Min' : '1D'
+    const intraday = period === '1D' ? '&intraday_reporting=extended_hours' : ''
+    const res = await authFetch(`${API_BASE}/history?period=${period}&timeframe=${timeframe}${intraday}`)
+    const data = await res.json()
+    if (data.ok && data.data?.snapshots) {
+      return data.data.snapshots
+    }
+    return []
+  } catch {
+    return []
   }
-  // Ensure last point is current equity
-  history[history.length - 1] = {
-    timestamp: now,
-    equity,
-    pl: equity - history[0].equity,
-    pl_pct: ((equity - history[0].equity) / history[0].equity) * 100,
-  }
-  return history
 }
 
 // Generate mock price history for positions
@@ -133,6 +120,7 @@ export default function App() {
   const [setupChecked, setSetupChecked] = useState(false)
   const [time, setTime] = useState(new Date())
   const [portfolioHistory, setPortfolioHistory] = useState<PortfolioSnapshot[]>([])
+  const [portfolioPeriod, setPortfolioPeriod] = useState<'1D' | '1W' | '1M'>('1D')
 
   useEffect(() => {
     const checkSetup = async () => {
@@ -158,29 +146,10 @@ export default function App() {
         if (data.ok) {
           setStatus(data.data)
           setError(null)
-          
-          // Generate mock portfolio history if we have account data but no history
-          if (data.data.account && portfolioHistory.length === 0) {
-            setPortfolioHistory(generateMockPortfolioHistory(data.data.account.equity))
-          } else if (data.data.account) {
-            // Append new data point on each fetch
-            setPortfolioHistory(prev => {
-              const now = Date.now()
-              const newSnapshot: PortfolioSnapshot = {
-                timestamp: now,
-                equity: data.data.account.equity,
-                pl: data.data.account.equity - (prev[0]?.equity || data.data.account.equity),
-                pl_pct: prev[0] ? ((data.data.account.equity - prev[0].equity) / prev[0].equity) * 100 : 0,
-              }
-              // Keep last 48 points (4 hours at 5-second intervals, or display fewer if needed)
-              const updated = [...prev, newSnapshot].slice(-48)
-              return updated
-            })
-          }
         } else {
           setError(data.error || 'Failed to fetch status')
         }
-      } catch (err) {
+      } catch {
         setError('Connection failed - is the agent running?')
       }
     }
@@ -196,6 +165,21 @@ export default function App() {
       }
     }
   }, [setupChecked, showSetup])
+
+  useEffect(() => {
+    if (!setupChecked || showSetup) return
+
+    const loadPortfolioHistory = async () => {
+      const history = await fetchPortfolioHistory(portfolioPeriod)
+      if (history.length > 0) {
+        setPortfolioHistory(history)
+      }
+    }
+
+    loadPortfolioHistory()
+    const historyInterval = setInterval(loadPortfolioHistory, 60000)
+    return () => clearInterval(historyInterval)
+  }, [setupChecked, showSetup, portfolioPeriod])
 
   const handleSaveConfig = async (config: Config) => {
     const res = await authFetch(`${API_BASE}/config`, {
@@ -241,10 +225,47 @@ export default function App() {
   }, [portfolioHistory])
 
   const portfolioChartLabels = useMemo(() => {
-    return portfolioHistory.map(s => 
-      new Date(s.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-    )
-  }, [portfolioHistory])
+    return portfolioHistory.map(s => {
+      const date = new Date(s.timestamp)
+      if (portfolioPeriod === '1D') {
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      }
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    })
+  }, [portfolioHistory, portfolioPeriod])
+
+  const { marketMarkers, marketHoursZone } = useMemo(() => {
+    if (portfolioPeriod !== '1D' || portfolioHistory.length === 0) {
+      return { marketMarkers: undefined, marketHoursZone: undefined }
+    }
+    
+    const markers: { index: number; label: string; color?: string }[] = []
+    let openIndex = -1
+    let closeIndex = -1
+    
+    portfolioHistory.forEach((s, i) => {
+      const date = new Date(s.timestamp)
+      const hours = date.getHours()
+      const minutes = date.getMinutes()
+      
+      if (hours === 9 && minutes >= 30 && minutes < 45 && openIndex === -1) {
+        openIndex = i
+        markers.push({ index: i, label: 'OPEN', color: 'var(--color-hud-success)' })
+      } else if (hours === 16 && minutes === 0 && closeIndex === -1) {
+        closeIndex = i
+        markers.push({ index: i, label: 'CLOSE', color: 'var(--color-hud-error)' })
+      }
+    })
+    
+    const zone = openIndex >= 0 && closeIndex >= 0 
+      ? { openIndex, closeIndex } 
+      : undefined
+    
+    return { 
+      marketMarkers: markers.length > 0 ? markers : undefined,
+      marketHoursZone: zone
+    }
+  }, [portfolioHistory, portfolioPeriod])
 
   // Normalize position price histories to % change for stacked comparison view
   const normalizedPositionSeries = useMemo(() => {
@@ -488,7 +509,26 @@ export default function App() {
 
           {/* Row 2: Portfolio Performance Chart */}
           <div className="col-span-4 md:col-span-8 lg:col-span-8">
-            <Panel title="PORTFOLIO PERFORMANCE" titleRight="24H" className="h-[320px]">
+            <Panel 
+              title="PORTFOLIO PERFORMANCE" 
+              titleRight={
+                <div className="flex gap-2">
+                  {(['1D', '1W', '1M'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setPortfolioPeriod(p)}
+                      className={clsx(
+                        'hud-label transition-colors',
+                        portfolioPeriod === p ? 'text-hud-primary' : 'text-hud-text-dim hover:text-hud-text'
+                      )}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              } 
+              className="h-[320px]"
+            >
               {portfolioChartData.length > 1 ? (
                 <div className="h-full w-full">
                   <LineChart
@@ -498,6 +538,8 @@ export default function App() {
                     showGrid={true}
                     showDots={false}
                     formatValue={(v) => `$${(v / 1000).toFixed(1)}k`}
+                    markers={marketMarkers}
+                    marketHours={marketHoursZone}
                   />
                 </div>
               ) : (

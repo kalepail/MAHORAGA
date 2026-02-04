@@ -126,6 +126,25 @@ export interface MarketDay {
   settlement_date: string;
 }
 
+export interface PortfolioHistoryParams {
+  period?: string;
+  timeframe?: string;
+  intraday_reporting?: "market_hours" | "extended_hours" | "continuous";
+  start?: string;
+  end?: string;
+  pnl_reset?: "per_day" | "no_reset";
+}
+
+export interface PortfolioHistory {
+  timestamp: number[];
+  equity: number[];
+  profit_loss: number[];
+  profit_loss_pct: number[];
+  base_value: number;
+  base_value_asof?: string;
+  timeframe: string;
+}
+
 export interface Asset {
   id: string;
   class: "us_equity" | "crypto";
@@ -194,8 +213,10 @@ export interface BrokerProvider {
 
   getClock(): Promise<MarketClock>;
   getCalendar(start: string, end: string): Promise<MarketDay[]>;
-  
+
   getAsset(symbol: string): Promise<Asset | null>;
+
+  getPortfolioHistory(params?: PortfolioHistoryParams): Promise<PortfolioHistory>;
 }
 
 export interface MarketDataProvider {

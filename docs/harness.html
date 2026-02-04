@@ -7,20 +7,17 @@
   <meta name="description" content="Run Mahoraga 24/7 without a local machine. The Harness is a Cloudflare Durable Object with persistent state, crypto trading, and multi-source sentiment signals.">
   <link rel="canonical" href="https://mahoraga.dev/harness.html">
 
-  <!-- Open Graph -->
   <meta property="og:title" content="The Harness — 24/7 Cloud Trading Agent">
   <meta property="og:description" content="Run Mahoraga 24/7 on Cloudflare Workers. Persistent state, crypto trading, multi-source signals.">
   <meta property="og:image" content="https://mahoraga.dev/og-image.png">
   <meta property="og:url" content="https://mahoraga.dev/harness.html">
   <meta property="og:type" content="article">
 
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="The Harness — 24/7 Cloud Trading Agent">
   <meta name="twitter:description" content="Run Mahoraga 24/7 on Cloudflare Workers without a local machine.">
   <meta name="twitter:image" content="https://mahoraga.dev/og-image.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/mahoraga.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/og-image.png">
 
@@ -29,9 +26,10 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #fdfcfa; --bg-subtle: #f5f3ef; --border: #e8e4dd;
-      --muted: #9a9488; --subtle: #6b655c; --text: #3d3a35; --bright: #1a1815;
-      --accent: #2563eb; --success: #16a34a;
+      --bg: #0a0c0e; --bg-subtle: #0d1012; --border: rgba(122, 155, 168, 0.15);
+      --muted: #4a5a62; --subtle: #6a7a82; --text: #7a9ba8; --bright: #c8dce4;
+      --accent: #7a9ba8; --success: #4a9868;
+      --sidebar-width: 200px;
     }
     html { font-size: 14px; }
     body {
@@ -40,254 +38,229 @@
       min-height: 100vh; line-height: 1.7;
       -webkit-font-smoothing: antialiased;
     }
-    ::selection { background: var(--accent); color: white; }
-    .container { max-width: 720px; margin: 0 auto; padding: 48px 24px 120px; }
-    
-    .nav { margin-bottom: 48px; }
-    .nav a {
+    ::selection { background: var(--accent); color: var(--bg); }
+
+    .disclaimer {
+      background: #111; color: #999; text-align: center;
+      padding: 10px 16px; font-size: 11px; letter-spacing: 0.5px;
+    }
+
+    .site-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--bg); z-index: 100;
+    }
+
+    .site-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--bright);
+    }
+    .site-logo img { width: 18px; height: 18px; }
+    .site-logo span { font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+
+    .header-links { display: flex; gap: 24px; }
+    .header-links a {
       color: var(--muted); text-decoration: none; font-size: 11px;
-      letter-spacing: 1px; text-transform: uppercase;
-      transition: color 0.15s;
+      letter-spacing: 1px; text-transform: uppercase; transition: color 0.15s;
     }
-    .nav a:hover { color: var(--bright); }
-    
-    h1 {
-      font-size: 20px; font-weight: 600; color: var(--bright);
-      margin-bottom: 8px; letter-spacing: 1px;
+    .header-links a:hover { color: var(--bright); }
+
+    .docs-layout { display: flex; min-height: calc(100vh - 100px); }
+
+    .sidebar {
+      width: var(--sidebar-width); border-right: 1px solid var(--border);
+      padding: 32px 24px; position: sticky; top: 57px;
+      height: calc(100vh - 57px); overflow-y: auto; flex-shrink: 0;
     }
+    .sidebar-title {
+      font-size: 9px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 2px; color: var(--muted); margin-bottom: 16px;
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+    .sidebar-nav a {
+      color: var(--subtle); text-decoration: none; font-size: 12px;
+      padding: 8px 12px; border-radius: 4px; transition: all 0.15s;
+    }
+    .sidebar-nav a:hover { color: var(--bright); background: var(--bg-subtle); }
+    .sidebar-nav a.active { color: var(--bright); background: var(--bg-subtle); font-weight: 500; }
+
+    .main-content { flex: 1; max-width: 720px; padding: 48px 48px 120px; margin: 0 auto; }
+
+    h1 { font-size: 20px; font-weight: 600; color: var(--bright); margin-bottom: 8px; letter-spacing: 1px; }
     .subtitle { color: var(--subtle); font-size: 13px; margin-bottom: 48px; }
-    
     h2 {
       font-size: 11px; font-weight: 500; text-transform: uppercase;
       letter-spacing: 2px; color: var(--muted);
       margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
     }
     h2:first-of-type { margin-top: 0; }
-    
-    h3 {
-      font-size: 13px; font-weight: 600; color: var(--bright);
-      margin: 24px 0 12px;
-    }
-    
+    h3 { font-size: 13px; font-weight: 600; color: var(--bright); margin: 24px 0 12px; }
     p { margin-bottom: 16px; font-size: 13px; }
-    
     pre {
       background: var(--bg-subtle); border: 1px solid var(--border);
-      padding: 16px 20px; margin: 16px 0; overflow-x: auto;
-      font-size: 11px; line-height: 1.5;
+      padding: 16px 20px; margin: 16px 0; overflow-x: auto; font-size: 11px; line-height: 1.5;
     }
-    code {
-      background: var(--bg-subtle); padding: 2px 6px; font-size: 12px;
-    }
+    code { background: var(--bg-subtle); padding: 2px 6px; font-size: 12px; }
     pre code { background: none; padding: 0; }
-    
     ul, ol { margin: 16px 0; padding-left: 24px; font-size: 13px; }
     li { margin-bottom: 8px; }
-    
-    table {
-      width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px;
-    }
-    th, td {
-      text-align: left; padding: 10px 12px; border: 1px solid var(--border);
-    }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
+    th, td { text-align: left; padding: 10px 12px; border: 1px solid var(--border); }
     th { background: var(--bg-subtle); font-weight: 500; color: var(--bright); }
-    
     a { color: var(--accent); }
     a:hover { text-decoration: none; }
 
-    .disclaimer {
-      background: #111;
-      color: #999;
-      text-align: center;
-      padding: 10px 16px;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-    }
-    
     .note {
-      background: #dbeafe; border: 1px solid #3b82f6;
-      padding: 12px 16px; font-size: 12px; color: #1e40af;
-      margin: 16px 0;
+      background: rgba(122, 155, 168, 0.1); border: 1px solid rgba(122, 155, 168, 0.3);
+      padding: 12px 16px; font-size: 12px; color: var(--bright); margin: 16px 0;
     }
-
-    .warning {
-      background: #fef3c7; border: 1px solid #f59e0b;
-      padding: 12px 16px; font-size: 12px; color: #92400e;
-      margin: 16px 0;
-    }
-    
     .tag {
-      display: inline-block;
-      padding: 2px 8px;
-      font-size: 10px;
-      border-radius: 3px;
-      font-weight: 500;
-      letter-spacing: 0.5px;
+      display: inline-block; padding: 2px 8px; font-size: 10px;
+      border-radius: 3px; font-weight: 500; letter-spacing: 0.5px;
     }
-    .tag-tune { background: #dbeafe; color: #1e40af; }
-    .tag-toggle { background: #dcfce7; color: #166534; }
-    .tag-custom { background: #fef3c7; color: #92400e; }
-    
-    .footer {
-      margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border);
-      font-size: 11px; color: var(--muted);
+    .tag-tune { background: rgba(122, 155, 168, 0.2); color: var(--bright); }
+    .tag-toggle { background: rgba(74, 152, 104, 0.2); color: #6fbf8a; }
+    .tag-custom { background: rgba(184, 152, 72, 0.2); color: #c9b362; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main-content { padding: 32px 24px 80px; }
+      .site-header { padding: 12px 16px; }
+      .header-links { gap: 16px; }
     }
-    .footer a { color: var(--subtle); text-decoration: none; margin-right: 24px; }
-    .footer a:hover { color: var(--bright); }
   </style>
 </head>
 <body>
   <div class="disclaimer">For educational purposes only. Trading involves substantial risk of loss. Not financial advice.</div>
-  <div class="container">
-    <nav class="nav">
-      <a href="./index.html">← Back to Mahoraga</a>
+
+  <header class="site-header">
+    <a href="./index.html" class="site-logo">
+      <img src="./mahoraga.svg" alt="Mahoraga">
+      <span>Mahoraga</span>
+    </a>
+    <nav class="header-links">
+      <a href="https://github.com/ygwyg/MAHORAGA">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <a href="https://discord.gg/Ys8KpsW5NN">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+        Discord
+      </a>
     </nav>
+  </header>
 
-    <h1>The Harness</h1>
-    <p class="subtitle">A Cloudflare Durable Object that runs 24/7 without a local machine.</p>
+  <div class="docs-layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">Documentation</div>
+      <nav class="sidebar-nav">
+        <a href="./getting-started.html">Getting Started</a>
+        <a href="./architecture.html">Architecture</a>
+        <a href="./configuration.html">Configuration</a>
+        <a href="./harness.html" class="active">Harness</a>
+        <a href="./extending.html">Extending</a>
+      </nav>
+    </aside>
 
-    <h2>What is the Harness?</h2>
-    <p>The Harness (<code>MahoragaHarness</code>) is an advanced trading agent that runs as a Cloudflare Durable Object. Unlike the Node agent which requires a local machine, the Harness runs in the cloud with:</p>
-    <ul>
-      <li><strong>24/7 uptime</strong> — No local machine required</li>
-      <li><strong>Persistent state</strong> — Survives restarts and deployments</li>
-      <li><strong>Crypto trading</strong> — Trade BTC, ETH, SOL around the clock</li>
-      <li><strong>Multi-source signals</strong> — StockTwits + Reddit + Twitter confirmation</li>
-      <li><strong>Automatic scheduling</strong> — Alarm-based execution every 30 seconds</li>
-    </ul>
+    <main class="main-content">
+      <h1>The Harness</h1>
+      <p class="subtitle">Customize the trading agent code.</p>
 
-    <h2>Quick Start</h2>
-    <h3>1. Deploy to Cloudflare</h3>
-    <pre>npx wrangler deploy</pre>
+      <h2>Overview</h2>
+      <p>The Harness (<code>src/durable-objects/mahoraga-harness.ts</code>) is the core trading agent. It runs as a Cloudflare Durable Object with persistent state and alarm-based scheduling.</p>
+      <p>This page is for developers who want to modify the trading logic, add data sources, or customize LLM prompts. For setup, see <a href="./getting-started.html">Getting Started</a>. For config options, see <a href="./configuration.html">Configuration</a>.</p>
 
-    <h3>2. Set Secrets</h3>
-    <pre>npx wrangler secret put ALPACA_API_KEY
-npx wrangler secret put ALPACA_API_SECRET
-npx wrangler secret put OPENAI_API_KEY
-npx wrangler secret put KILL_SWITCH_SECRET
+      <h2>Code Markers</h2>
+      <p>The harness file uses markers to help you find what to modify:</p>
+      
+      <table>
+        <tr>
+          <th>Marker</th>
+          <th>Meaning</th>
+        </tr>
+        <tr>
+          <td><span class="tag tag-tune">[TUNE]</span></td>
+          <td>Numeric values you can adjust (thresholds, limits, percentages)</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-toggle">[TOGGLE]</span></td>
+          <td>Features you can enable/disable</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-custom">[CUSTOMIZABLE]</span></td>
+          <td>Sections with code you might want to modify</td>
+        </tr>
+      </table>
 
-# Optional
-npx wrangler secret put ALPACA_PAPER           # "true" for paper trading
-npx wrangler secret put TWITTER_BEARER_TOKEN
-npx wrangler secret put DISCORD_WEBHOOK_URL</pre>
+      <h2>Section Guide</h2>
+      <table>
+        <tr>
+          <th>Section</th>
+          <th>Lines</th>
+          <th>What to Customize</th>
+        </tr>
+        <tr>
+          <td>AgentConfig</td>
+          <td>51-104</td>
+          <td>All tunable parameters (risk, sizing, thresholds)</td>
+        </tr>
+        <tr>
+          <td>SOURCE_CONFIG</td>
+          <td>218-252</td>
+          <td>Source weights, flair multipliers, time decay</td>
+        </tr>
+        <tr>
+          <td>Helper Functions</td>
+          <td>328-408</td>
+          <td>Sentiment detection, ticker extraction</td>
+        </tr>
+        <tr>
+          <td>Alarm Handler</td>
+          <td>430-510</td>
+          <td>What runs when, intervals, order of operations</td>
+        </tr>
+        <tr>
+          <td>Data Gathering</td>
+          <td>640-920</td>
+          <td>Add new data sources here</td>
+        </tr>
+        <tr>
+          <td>Twitter</td>
+          <td>980-1200</td>
+          <td>Confirmation logic, budget caps</td>
+        </tr>
+        <tr>
+          <td>LLM Research</td>
+          <td>1210-1540</td>
+          <td>Prompts for signal and position analysis</td>
+        </tr>
+        <tr>
+          <td>Trading Logic</td>
+          <td>1550-1730</td>
+          <td>Entry/exit rules, position sizing</td>
+        </tr>
+        <tr>
+          <td>Staleness</td>
+          <td>1740-1800</td>
+          <td>When to exit positions that lost momentum</td>
+        </tr>
+        <tr>
+          <td>Options</td>
+          <td>1810-2010</td>
+          <td>Delta, DTE, options-specific limits</td>
+        </tr>
+        <tr>
+          <td>Pre-Market</td>
+          <td>2020-2140</td>
+          <td>Morning analysis and plan execution</td>
+        </tr>
+      </table>
 
-    <h3>3. Enable the Agent</h3>
-    <pre>curl https://your-worker.workers.dev/agent/enable</pre>
+      <h2>Adding a New Data Source</h2>
+      <p>The most common customization is adding a new data source. Here's how:</p>
 
-    <h3>4. Monitor</h3>
-    <pre># Check status
-curl https://your-worker.workers.dev/agent/status
-
-# View logs
-curl https://your-worker.workers.dev/agent/logs
-
-# Check costs
-curl https://your-worker.workers.dev/agent/costs</pre>
-
-    <h2>Local Development</h2>
-    <pre># Terminal 1 - Start wrangler
-npx wrangler dev
-
-# Terminal 2 - Start dashboard
-cd dashboard && npm run dev
-
-# Terminal 3 - Enable
-curl http://localhost:8787/agent/enable
-
-# Manual trigger (for testing)
-curl http://localhost:8787/agent/trigger</pre>
-
-    <h2>Customization Guide</h2>
-    <p>The Harness file (<code>src/durable-objects/mahoraga-harness.ts</code>) is documented with markers to help you find what to modify:</p>
-    
-    <table>
-      <tr>
-        <th>Marker</th>
-        <th>Meaning</th>
-      </tr>
-      <tr>
-        <td><span class="tag tag-tune">[TUNE]</span></td>
-        <td>Numeric values you can adjust (thresholds, limits, percentages)</td>
-      </tr>
-      <tr>
-        <td><span class="tag tag-toggle">[TOGGLE]</span></td>
-        <td>Features you can enable/disable</td>
-      </tr>
-      <tr>
-        <td><span class="tag tag-custom">[CUSTOMIZABLE]</span></td>
-        <td>Sections with code you might want to modify</td>
-      </tr>
-    </table>
-
-    <h2>Section Guide</h2>
-    <table>
-      <tr>
-        <th>Section</th>
-        <th>Lines</th>
-        <th>What to Customize</th>
-      </tr>
-      <tr>
-        <td>AgentConfig</td>
-        <td>51-104</td>
-        <td>All tunable parameters (risk, sizing, thresholds)</td>
-      </tr>
-      <tr>
-        <td>SOURCE_CONFIG</td>
-        <td>218-252</td>
-        <td>Source weights, flair multipliers, time decay</td>
-      </tr>
-      <tr>
-        <td>Helper Functions</td>
-        <td>328-408</td>
-        <td>Sentiment detection, ticker extraction</td>
-      </tr>
-      <tr>
-        <td>Alarm Handler</td>
-        <td>430-510</td>
-        <td>What runs when, intervals, order of operations</td>
-      </tr>
-      <tr>
-        <td>Data Gathering</td>
-        <td>640-920</td>
-        <td>Add new data sources here</td>
-      </tr>
-      <tr>
-        <td>Twitter</td>
-        <td>980-1200</td>
-        <td>Confirmation logic, budget caps</td>
-      </tr>
-      <tr>
-        <td>LLM Research</td>
-        <td>1210-1540</td>
-        <td>Prompts for signal and position analysis</td>
-      </tr>
-      <tr>
-        <td>Trading Logic</td>
-        <td>1550-1730</td>
-        <td>Entry/exit rules, position sizing</td>
-      </tr>
-      <tr>
-        <td>Staleness</td>
-        <td>1740-1800</td>
-        <td>When to exit positions that lost momentum</td>
-      </tr>
-      <tr>
-        <td>Options</td>
-        <td>1810-2010</td>
-        <td>Delta, DTE, options-specific limits</td>
-      </tr>
-      <tr>
-        <td>Pre-Market</td>
-        <td>2020-2140</td>
-        <td>Morning analysis and plan execution</td>
-      </tr>
-    </table>
-
-    <h2>Adding a New Data Source</h2>
-    <p>The most common customization is adding a new data source. Here's how:</p>
-
-    <h3>1. Create a gather method</h3>
-    <pre>private async gatherMySource(): Promise&lt;Signal[]&gt; {
+      <h3>1. Create a gather method</h3>
+      <pre>private async gatherMySource(): Promise&lt;Signal[]&gt; {
   const signals: Signal[] = [];
   
   try {
@@ -320,8 +293,8 @@ curl http://localhost:8787/agent/trigger</pre>
   return signals;
 }</pre>
 
-    <h3>2. Add to runDataGatherers</h3>
-    <pre>private async runDataGatherers(): Promise&lt;void&gt; {
+      <h3>2. Add to runDataGatherers</h3>
+      <pre>private async runDataGatherers(): Promise&lt;void&gt; {
   const [stocktwitsSignals, redditSignals, cryptoSignals, mySignals] = 
     await Promise.all([
       this.gatherStockTwits(),
@@ -338,8 +311,8 @@ curl http://localhost:8787/agent/trigger</pre>
   ];
 }</pre>
 
-    <h3>3. Add source weight</h3>
-    <pre>const SOURCE_CONFIG = {
+      <h3>3. Add source weight</h3>
+      <pre>const SOURCE_CONFIG = {
   weights: {
     stocktwits: 0.85,
     reddit_wallstreetbets: 0.6,
@@ -349,151 +322,33 @@ curl http://localhost:8787/agent/trigger</pre>
   // ...
 };</pre>
 
-    <h2>Modifying LLM Prompts</h2>
-    <p>The LLM prompts are in the <code>researchSignal()</code> and <code>analyzeSignalsWithLLM()</code> methods. Here's the signal research prompt:</p>
+      <h2>Modifying Source Weights</h2>
+      <p>The <code>SOURCE_CONFIG</code> object controls how much to trust each data source:</p>
+      <pre>const SOURCE_CONFIG = {
+  weights: {
+    stocktwits: 0.85,           // Decent signal, some noise
+    reddit_wallstreetbets: 0.6, // High volume, lots of memes
+    reddit_stocks: 0.9,         // Higher quality discussions
+    reddit_investing: 0.8,      // Long-term focused
+    twitter_fintwit: 0.95,      // Real traders
+  },
+  flairMultipliers: {
+    "DD": 1.5,                  // Due Diligence - boost
+    "YOLO": 0.6,               // Entertainment - penalize
+    "Meme": 0.4,
+  },
+  decayHalfLifeMinutes: 120,    // How fast old posts lose weight
+};</pre>
 
-    <pre>const prompt = `Should we BUY this stock based on social sentiment?
+      <h2>Customizing LLM Prompts</h2>
+      <p>The LLM research prompts are in the <code>researchSignal()</code> and <code>analyzePositionWithLLM()</code> methods. You can modify what context the LLM receives and how it should respond.</p>
 
-SYMBOL: ${symbol}
-SENTIMENT: ${(sentimentScore * 100).toFixed(0)}% bullish
-SOURCES: ${sources.join(", ")}
+      <div class="note">
+        <strong>Tip:</strong> The Harness stores state in Durable Object storage. To reset state, redeploy with a new migration tag in <code>wrangler.jsonc</code>.
+      </div>
 
-Evaluate if this is a good entry. Consider:
-- Is the sentiment justified?
-- Is it too late (already pumped)?
-- Any red flags?
-
-JSON response:
-{
-  "verdict": "BUY|SKIP|WAIT",
-  "confidence": 0.0-1.0,
-  "entry_quality": "excellent|good|fair|poor",
-  "reasoning": "brief reason",
-  "red_flags": ["any concerns"],
-  "catalysts": ["positive factors"]
-}`;</pre>
-
-    <p>Modify the prompt to add your own criteria, context, or change the output format.</p>
-
-    <h2>Configuration Reference</h2>
-    <table>
-      <tr>
-        <th>Setting</th>
-        <th>Default</th>
-        <th>Description</th>
-      </tr>
-      <tr>
-        <td><code>max_positions</code></td>
-        <td>5</td>
-        <td>Maximum concurrent positions</td>
-      </tr>
-      <tr>
-        <td><code>max_position_value</code></td>
-        <td>5000</td>
-        <td>Maximum $ per position</td>
-      </tr>
-      <tr>
-        <td><code>take_profit_pct</code></td>
-        <td>10</td>
-        <td>Take profit percentage</td>
-      </tr>
-      <tr>
-        <td><code>stop_loss_pct</code></td>
-        <td>5</td>
-        <td>Stop loss percentage</td>
-      </tr>
-      <tr>
-        <td><code>min_sentiment_score</code></td>
-        <td>0.3</td>
-        <td>Minimum sentiment to consider</td>
-      </tr>
-      <tr>
-        <td><code>min_analyst_confidence</code></td>
-        <td>0.6</td>
-        <td>Minimum LLM confidence to trade</td>
-      </tr>
-      <tr>
-        <td><code>options_enabled</code></td>
-        <td>false</td>
-        <td>Enable options trading</td>
-      </tr>
-      <tr>
-        <td><code>crypto_enabled</code></td>
-        <td>false</td>
-        <td>Enable 24/7 crypto trading</td>
-      </tr>
-      <tr>
-        <td><code>crypto_symbols</code></td>
-        <td>["BTC/USD", "ETH/USD", "SOL/USD"]</td>
-        <td>Which cryptos to trade</td>
-      </tr>
-      <tr>
-        <td><code>stale_position_enabled</code></td>
-        <td>true</td>
-        <td>Auto-exit stale positions</td>
-      </tr>
-    </table>
-
-    <h2>API Endpoints</h2>
-    <table>
-      <tr>
-        <th>Endpoint</th>
-        <th>Method</th>
-        <th>Description</th>
-      </tr>
-      <tr>
-        <td><code>/agent/status</code></td>
-        <td>GET</td>
-        <td>Full status (account, positions, signals, config)</td>
-      </tr>
-      <tr>
-        <td><code>/agent/enable</code></td>
-        <td>GET/POST</td>
-        <td>Enable the agent</td>
-      </tr>
-      <tr>
-        <td><code>/agent/disable</code></td>
-        <td>GET/POST</td>
-        <td>Disable the agent</td>
-      </tr>
-      <tr>
-        <td><code>/agent/config</code></td>
-        <td>GET/POST</td>
-        <td>Get or update configuration</td>
-      </tr>
-      <tr>
-        <td><code>/agent/logs</code></td>
-        <td>GET</td>
-        <td>Get recent logs</td>
-      </tr>
-      <tr>
-        <td><code>/agent/costs</code></td>
-        <td>GET</td>
-        <td>Get LLM cost tracking</td>
-      </tr>
-      <tr>
-        <td><code>/agent/signals</code></td>
-        <td>GET</td>
-        <td>Get current signal cache</td>
-      </tr>
-      <tr>
-        <td><code>/agent/trigger</code></td>
-        <td>GET/POST</td>
-        <td>Manually trigger alarm (for testing)</td>
-      </tr>
-    </table>
-
-    <div class="note">
-      <strong>Tip:</strong> The Harness stores state in Durable Object storage. If you need to reset, you can delete the DO via the Cloudflare dashboard or redeploy with a new migration tag.
-    </div>
-
-    <div class="footer">
-      <a href="./index.html">Home</a>
-      <a href="./architecture.html">Architecture</a>
-      <a href="./extending.html">Extending</a>
-      <a href="https://github.com/ygwyg/MAHORAGA">GitHub</a>
-      <a href="https://discord.gg/Ys8KpsW5NN">Discord</a>
-    </div>
+      <p>For all configuration options and API endpoints, see <a href="./configuration.html">Configuration</a>.</p>
+    </main>
   </div>
 </body>
 </html>

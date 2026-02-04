@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { PolicyEngine, PolicyContext } from "./engine";
-import { PolicyConfig, getDefaultOptionsPolicyConfig } from "./config";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { OrderPreview } from "../mcp/types";
-import type { Account, Position, MarketClock } from "../providers/types";
+import type { Account, MarketClock, Position } from "../providers/types";
 import type { RiskState } from "../storage/d1/queries/risk-state";
+import { getDefaultOptionsPolicyConfig, type PolicyConfig } from "./config";
+import { type PolicyContext, PolicyEngine } from "./engine";
 
 function createTestConfig(overrides: Partial<PolicyConfig> = {}): PolicyConfig {
   return {
@@ -167,7 +167,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "loss_cooldown")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "loss_cooldown")).toBe(true);
     });
 
     it("allows trades after cooldown expires", () => {
@@ -193,7 +193,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "daily_loss_limit")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "daily_loss_limit")).toBe(true);
     });
 
     it("allows trades below daily loss limit", () => {
@@ -216,7 +216,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "trading_hours")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "trading_hours")).toBe(true);
     });
 
     it("allows crypto trades outside market hours", () => {
@@ -230,7 +230,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "trading_hours")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "trading_hours")).toBe(false);
     });
 
     it("adds warning for extended hours trading when allowed", () => {
@@ -241,7 +241,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(true);
-      expect(result.warnings.some(w => w.rule === "extended_hours")).toBe(true);
+      expect(result.warnings.some((w) => w.rule === "extended_hours")).toBe(true);
     });
   });
 
@@ -252,7 +252,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "symbol_denied")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "symbol_denied")).toBe(true);
     });
 
     it("blocks symbols not in allow list when allow list is set", () => {
@@ -261,7 +261,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "symbol_not_allowed")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "symbol_not_allowed")).toBe(true);
     });
 
     it("allows symbols in allow list", () => {
@@ -269,7 +269,7 @@ describe("PolicyEngine", () => {
       const ctx = createTestContext();
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "symbol_not_allowed")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "symbol_not_allowed")).toBe(false);
     });
 
     it("is case-insensitive for symbol matching", () => {
@@ -279,7 +279,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "symbol_denied")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "symbol_denied")).toBe(true);
     });
   });
 
@@ -291,7 +291,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "order_type_not_allowed")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "order_type_not_allowed")).toBe(true);
     });
 
     it("allows configured order types", () => {
@@ -300,7 +300,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "order_type_not_allowed")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "order_type_not_allowed")).toBe(false);
     });
   });
 
@@ -312,7 +312,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "max_notional")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "max_notional")).toBe(true);
     });
 
     it("allows orders within notional limit", () => {
@@ -321,7 +321,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "max_notional")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "max_notional")).toBe(false);
     });
   });
 
@@ -333,7 +333,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "max_position_pct")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "max_position_pct")).toBe(true);
     });
 
     it("includes existing position value in calculation", () => {
@@ -344,7 +344,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "max_position_pct")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "max_position_pct")).toBe(true);
     });
 
     it("adds warning when approaching position size limit", () => {
@@ -355,7 +355,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.warnings.some(w => w.rule === "position_size_warning")).toBe(true);
+      expect(result.warnings.some((w) => w.rule === "position_size_warning")).toBe(true);
     });
   });
 
@@ -373,7 +373,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "max_open_positions")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "max_open_positions")).toBe(true);
     });
 
     it("allows adding to existing position at max positions", () => {
@@ -388,7 +388,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "max_open_positions")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "max_open_positions")).toBe(false);
     });
   });
 
@@ -401,7 +401,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "short_selling_blocked")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "short_selling_blocked")).toBe(true);
     });
 
     it("blocks selling more shares than owned", () => {
@@ -412,7 +412,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "short_selling_blocked")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "short_selling_blocked")).toBe(true);
     });
 
     it("allows selling owned shares", () => {
@@ -422,7 +422,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "short_selling_blocked")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "short_selling_blocked")).toBe(false);
     });
 
     it("allows short selling when enabled", () => {
@@ -433,7 +433,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "short_selling_blocked")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "short_selling_blocked")).toBe(false);
     });
   });
 
@@ -446,7 +446,7 @@ describe("PolicyEngine", () => {
 
       const result = engine.evaluate(ctx);
       expect(result.allowed).toBe(false);
-      expect(result.violations.some(v => v.rule === "insufficient_funds")).toBe(true);
+      expect(result.violations.some((v) => v.rule === "insufficient_funds")).toBe(true);
     });
 
     it("allows orders within buying power when use_cash_only is false", () => {
@@ -457,7 +457,7 @@ describe("PolicyEngine", () => {
       });
 
       const result = engine.evaluate(ctx);
-      expect(result.violations.some(v => v.rule === "insufficient_funds")).toBe(false);
+      expect(result.violations.some((v) => v.rule === "insufficient_funds")).toBe(false);
     });
   });
 

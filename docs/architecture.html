@@ -7,20 +7,17 @@
   <meta name="description" content="Deep dive into Mahoraga's architecture: Durable Objects, signal processing, LLM decision making, and the two-step order flow for safe autonomous trading.">
   <link rel="canonical" href="https://mahoraga.dev/architecture.html">
 
-  <!-- Open Graph -->
   <meta property="og:title" content="Architecture — How Mahoraga Works">
   <meta property="og:description" content="Deep dive into Mahoraga's architecture: signal processing, LLM decisions, and safe autonomous trading.">
   <meta property="og:image" content="https://mahoraga.dev/og-image.png">
   <meta property="og:url" content="https://mahoraga.dev/architecture.html">
   <meta property="og:type" content="article">
 
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Architecture — How Mahoraga Works">
   <meta name="twitter:description" content="Deep dive into Mahoraga's architecture and LLM decision making.">
   <meta name="twitter:image" content="https://mahoraga.dev/og-image.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/mahoraga.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/og-image.png">
 
@@ -29,9 +26,10 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #fdfcfa; --bg-subtle: #f5f3ef; --border: #e8e4dd;
-      --muted: #9a9488; --subtle: #6b655c; --text: #3d3a35; --bright: #1a1815;
-      --accent: #2563eb; --success: #16a34a;
+      --bg: #0a0c0e; --bg-subtle: #0d1012; --border: rgba(122, 155, 168, 0.15);
+      --muted: #4a5a62; --subtle: #6a7a82; --text: #7a9ba8; --bright: #c8dce4;
+      --accent: #7a9ba8; --success: #4a9868;
+      --sidebar-width: 200px;
     }
     html { font-size: 14px; }
     body {
@@ -40,90 +38,124 @@
       min-height: 100vh; line-height: 1.7;
       -webkit-font-smoothing: antialiased;
     }
-    ::selection { background: var(--accent); color: white; }
-    .container { max-width: 640px; margin: 0 auto; padding: 48px 24px 120px; }
-    
-    .nav { margin-bottom: 48px; }
-    .nav a {
+    ::selection { background: var(--accent); color: var(--bg); }
+
+    .disclaimer {
+      background: #111; color: #999; text-align: center;
+      padding: 10px 16px; font-size: 11px; letter-spacing: 0.5px;
+    }
+
+    .site-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--bg); z-index: 100;
+    }
+
+    .site-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--bright);
+    }
+    .site-logo img { width: 18px; height: 18px; }
+    .site-logo span { font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+
+    .header-links { display: flex; gap: 24px; }
+    .header-links a {
       color: var(--muted); text-decoration: none; font-size: 11px;
-      letter-spacing: 1px; text-transform: uppercase;
-      transition: color 0.15s;
+      letter-spacing: 1px; text-transform: uppercase; transition: color 0.15s;
     }
-    .nav a:hover { color: var(--bright); }
-    
-    h1 {
-      font-size: 20px; font-weight: 600; color: var(--bright);
-      margin-bottom: 8px; letter-spacing: 1px;
+    .header-links a:hover { color: var(--bright); }
+
+    .docs-layout { display: flex; min-height: calc(100vh - 100px); }
+
+    .sidebar {
+      width: var(--sidebar-width); border-right: 1px solid var(--border);
+      padding: 32px 24px; position: sticky; top: 57px;
+      height: calc(100vh - 57px); overflow-y: auto; flex-shrink: 0;
     }
+    .sidebar-title {
+      font-size: 9px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 2px; color: var(--muted); margin-bottom: 16px;
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+    .sidebar-nav a {
+      color: var(--subtle); text-decoration: none; font-size: 12px;
+      padding: 8px 12px; border-radius: 4px; transition: all 0.15s;
+    }
+    .sidebar-nav a:hover { color: var(--bright); background: var(--bg-subtle); }
+    .sidebar-nav a.active { color: var(--bright); background: var(--bg-subtle); font-weight: 500; }
+
+    .main-content { flex: 1; max-width: 720px; padding: 48px 48px 120px; margin: 0 auto; }
+
+    h1 { font-size: 20px; font-weight: 600; color: var(--bright); margin-bottom: 8px; letter-spacing: 1px; }
     .subtitle { color: var(--subtle); font-size: 13px; margin-bottom: 48px; }
-    
     h2 {
       font-size: 11px; font-weight: 500; text-transform: uppercase;
       letter-spacing: 2px; color: var(--muted);
       margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
     }
     h2:first-of-type { margin-top: 0; }
-    
-    h3 {
-      font-size: 13px; font-weight: 600; color: var(--bright);
-      margin: 24px 0 12px;
-    }
-    
+    h3 { font-size: 13px; font-weight: 600; color: var(--bright); margin: 24px 0 12px; }
     p { margin-bottom: 16px; font-size: 13px; }
-    
     pre {
       background: var(--bg-subtle); border: 1px solid var(--border);
-      padding: 16px 20px; margin: 16px 0; overflow-x: auto;
-      font-size: 11px; line-height: 1.5;
+      padding: 16px 20px; margin: 16px 0; overflow-x: auto; font-size: 11px; line-height: 1.5;
     }
-    code {
-      background: var(--bg-subtle); padding: 2px 6px; font-size: 12px;
-    }
+    code { background: var(--bg-subtle); padding: 2px 6px; font-size: 12px; }
     pre code { background: none; padding: 0; }
-    
     ul, ol { margin: 16px 0; padding-left: 24px; font-size: 13px; }
     li { margin-bottom: 8px; }
-    
-    table {
-      width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px;
-    }
-    th, td {
-      text-align: left; padding: 10px 12px; border: 1px solid var(--border);
-    }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 12px; }
+    th, td { text-align: left; padding: 10px 12px; border: 1px solid var(--border); }
     th { background: var(--bg-subtle); font-weight: 500; color: var(--bright); }
-    
     a { color: var(--accent); }
     a:hover { text-decoration: none; }
 
-    .disclaimer {
-      background: #111;
-      color: #999;
-      text-align: center;
-      padding: 10px 16px;
-      font-size: 11px;
-      letter-spacing: 0.5px;
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main-content { padding: 32px 24px 80px; }
+      .site-header { padding: 12px 16px; }
+      .header-links { gap: 16px; }
     }
-    
-    .footer {
-      margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border);
-      font-size: 11px; color: var(--muted);
-    }
-    .footer a { color: var(--subtle); text-decoration: none; margin-right: 24px; }
-    .footer a:hover { color: var(--bright); }
   </style>
 </head>
 <body>
   <div class="disclaimer">For educational purposes only. Trading involves substantial risk of loss. Not financial advice.</div>
-  <div class="container">
-    <nav class="nav">
-      <a href="./index.html">← Back to Mahoraga</a>
+
+  <header class="site-header">
+    <a href="./index.html" class="site-logo">
+      <img src="./mahoraga.svg" alt="Mahoraga">
+      <span>Mahoraga</span>
+    </a>
+    <nav class="header-links">
+      <a href="https://github.com/ygwyg/MAHORAGA">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <a href="https://discord.gg/Ys8KpsW5NN">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+        Discord
+      </a>
     </nav>
+  </header>
 
-    <h1>Architecture</h1>
-    <p class="subtitle">How the system works under the hood.</p>
+  <div class="docs-layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">Documentation</div>
+      <nav class="sidebar-nav">
+        <a href="./getting-started.html">Getting Started</a>
+        <a href="./architecture.html" class="active">Architecture</a>
+        <a href="./configuration.html">Configuration</a>
+        <a href="./harness.html">Harness</a>
+        <a href="./extending.html">Extending</a>
+      </nav>
+    </aside>
 
-    <h2>System Overview</h2>
-    <pre>
+    <main class="main-content">
+      <h1>Architecture</h1>
+      <p class="subtitle">How the system works under the hood.</p>
+
+      <h2>System Overview</h2>
+      <pre>
 ┌─────────────────────────────────────────────────────────────────┐
 │                MAHORAGA HARNESS (Durable Object)                │
 ├─────────────────────────────────────────────────────────────────┤
@@ -158,42 +190,42 @@
                        │   Alpaca    │
                        │   Broker    │
                        └─────────────┘
-    </pre>
+      </pre>
 
-    <p>The Harness runs entirely on Cloudflare Workers with persistent state stored in Durable Object storage. It executes via an alarm every 30 seconds and survives restarts.</p>
+      <p>The Harness runs entirely on Cloudflare Workers with persistent state stored in Durable Object storage. It executes via an alarm every 30 seconds and survives restarts.</p>
 
-    <p>The MCP server provides tools for external integrations if needed.</p>
+      <p>The MCP server provides tools for external integrations if needed.</p>
 
-    <h2>Agent Loop</h2>
-    <p>The agent runs continuously with two main phases:</p>
+      <h2>Agent Loop</h2>
+      <p>The agent runs continuously with two main phases:</p>
 
-    <h3>Data Gathering (24/7)</h3>
-    <ol>
-      <li>Fetch trending stocks from StockTwits API</li>
-      <li>Calculate sentiment scores (bullish vs bearish messages)</li>
-      <li>Filter by minimum sentiment and volume thresholds</li>
-      <li>Send top signals to LLM for research</li>
-    </ol>
+      <h3>Data Gathering (24/7)</h3>
+      <ol>
+        <li>Fetch trending stocks from StockTwits API</li>
+        <li>Calculate sentiment scores (bullish vs bearish messages)</li>
+        <li>Filter by minimum sentiment and volume thresholds</li>
+        <li>Send top signals to LLM for research</li>
+      </ol>
 
-    <h3>Trading (Market Hours Only)</h3>
-    <ol>
-      <li>Check existing positions for stop-loss/take-profit</li>
-      <li>Ask LLM to analyze each position (HOLD/SELL)</li>
-      <li>Look for buy opportunities from researched signals</li>
-      <li>Execute trades via MCP server</li>
-    </ol>
+      <h3>Trading (Market Hours Only)</h3>
+      <ol>
+        <li>Check existing positions for stop-loss/take-profit</li>
+        <li>Ask LLM to analyze each position (HOLD/SELL)</li>
+        <li>Look for buy opportunities from researched signals</li>
+        <li>Execute trades via MCP server</li>
+      </ol>
 
-    <h2>LLM Decision Making</h2>
+      <h2>LLM Decision Making</h2>
 
-    <h3>Signal Research</h3>
-    <p>For each trending stock, the LLM receives:</p>
-    <ul>
-      <li>Symbol and current price</li>
-      <li>Sentiment score and volume</li>
-      <li>Source breakdown (bullish/bearish counts)</li>
-    </ul>
-    <p>It returns:</p>
-    <pre>{
+      <h3>Signal Research</h3>
+      <p>For each trending stock, the LLM receives:</p>
+      <ul>
+        <li>Symbol and current price</li>
+        <li>Sentiment score and volume</li>
+        <li>Source breakdown (bullish/bearish counts)</li>
+      </ul>
+      <p>It returns:</p>
+      <pre>{
   "verdict": "BUY" | "SKIP" | "WAIT",
   "confidence": 0.0-1.0,
   "reasoning": "explanation",
@@ -201,117 +233,95 @@
   "catalysts": ["positive factors"]
 }</pre>
 
-    <h3>Position Analysis</h3>
-    <p>For each held position, the LLM receives:</p>
-    <ul>
-      <li>Symbol, shares, P&L percentage</li>
-      <li>Current sentiment (if still trending)</li>
-      <li>Take profit/stop loss targets</li>
-    </ul>
-    <p>It returns:</p>
-    <pre>{
+      <h3>Position Analysis</h3>
+      <p>For each held position, the LLM receives:</p>
+      <ul>
+        <li>Symbol, shares, P&L percentage</li>
+        <li>Current sentiment (if still trending)</li>
+        <li>Take profit/stop loss targets</li>
+      </ul>
+      <p>It returns:</p>
+      <pre>{
   "action": "HOLD" | "SELL",
   "confidence": 0.0-1.0,
   "reasoning": "explanation"
 }</pre>
 
-    <h2>Order Flow</h2>
-    <p>All orders go through a two-step process for safety:</p>
+      <h2>Order Flow</h2>
+      <p>All orders go through a two-step process for safety:</p>
 
-    <h3>1. Preview</h3>
-    <p>Call <code>orders-preview</code> with order details. The policy engine validates:</p>
-    <ul>
-      <li>Kill switch not active</li>
-      <li>Not in cooldown period</li>
-      <li>Within position limits</li>
-      <li>Within daily loss limits</li>
-      <li>Sufficient buying power</li>
-    </ul>
-    <p>Returns an approval token (valid 5 minutes).</p>
+      <h3>1. Preview</h3>
+      <p>Call <code>orders-preview</code> with order details. The policy engine validates:</p>
+      <ul>
+        <li>Kill switch not active</li>
+        <li>Not in cooldown period</li>
+        <li>Within position limits</li>
+        <li>Within daily loss limits</li>
+        <li>Sufficient buying power</li>
+      </ul>
+      <p>Returns an approval token (valid 5 minutes).</p>
 
-    <h3>2. Submit</h3>
-    <p>Call <code>orders-submit</code> with the approval token. The order is executed through Alpaca.</p>
+      <h3>2. Submit</h3>
+      <p>Call <code>orders-submit</code> with the approval token. The order is executed through Alpaca.</p>
 
-    <h2>MCP Tools</h2>
-    <p>The MCP server exposes these tools:</p>
+      <h2>MCP Tools</h2>
+      <p>The MCP server at <code>/mcp</code> exposes tools for external integrations (e.g., Claude Desktop). Key tools:</p>
 
-    <table>
-      <tr>
-        <th>Tool</th>
-        <th>Description</th>
-      </tr>
-      <tr>
-        <td><code>accounts-get</code></td>
-        <td>Get account balance and status</td>
-      </tr>
-      <tr>
-        <td><code>positions-list</code></td>
-        <td>List current positions</td>
-      </tr>
-      <tr>
-        <td><code>positions-close</code></td>
-        <td>Close a position</td>
-      </tr>
-      <tr>
-        <td><code>orders-preview</code></td>
-        <td>Preview order, get approval token</td>
-      </tr>
-      <tr>
-        <td><code>orders-submit</code></td>
-        <td>Submit approved order</td>
-      </tr>
-      <tr>
-        <td><code>orders-list</code></td>
-        <td>List recent orders</td>
-      </tr>
-      <tr>
-        <td><code>market-clock</code></td>
-        <td>Check if market is open</td>
-      </tr>
-      <tr>
-        <td><code>market-quote</code></td>
-        <td>Get stock quote</td>
-      </tr>
-      <tr>
-        <td><code>technicals-get</code></td>
-        <td>Get RSI, MACD, etc.</td>
-      </tr>
-    </table>
+      <table>
+        <tr>
+          <th>Category</th>
+          <th>Tools</th>
+        </tr>
+        <tr>
+          <td>Account</td>
+          <td><code>accounts-get</code>, <code>portfolio-get</code></td>
+        </tr>
+        <tr>
+          <td>Positions</td>
+          <td><code>positions-list</code>, <code>positions-close</code></td>
+        </tr>
+        <tr>
+          <td>Orders</td>
+          <td><code>orders-preview</code>, <code>orders-submit</code>, <code>orders-list</code>, <code>orders-cancel</code></td>
+        </tr>
+        <tr>
+          <td>Market Data</td>
+          <td><code>market-clock</code>, <code>market-quote</code>, <code>market-movers</code></td>
+        </tr>
+        <tr>
+          <td>Technicals</td>
+          <td><code>technicals-get</code>, <code>signals-get</code></td>
+        </tr>
+        <tr>
+          <td>Risk</td>
+          <td><code>risk-status</code>, <code>killswitch-enable</code>, <code>killswitch-disable</code></td>
+        </tr>
+      </table>
+      <p>For daily operation, use the <code>/agent/*</code> HTTP endpoints instead (see <a href="./configuration.html">Configuration</a>).</p>
 
-    <h2>Project Structure</h2>
-    <pre>
+      <h2>Project Structure</h2>
+      <pre>
 mahoraga/
-├── wrangler.jsonc            # Cloudflare Workers config
-├── .dev.vars                 # API keys (gitignored)
-│
+├── wrangler.jsonc              # Cloudflare config
+├── .dev.vars                   # Local secrets (gitignored)
 ├── src/
-│   ├── index.ts              # Entry point
+│   ├── index.ts                # Entry point & routing
 │   ├── durable-objects/
-│   │   ├── mahoraga-harness.ts  # THE HARNESS - customize this!
-│   │   └── session.ts
+│   │   └── mahoraga-harness.ts # Trading agent (customize this!)
 │   ├── mcp/
-│   │   └── agent.ts          # MCP tool definitions
-│   ├── policy/
-│   │   ├── engine.ts         # Trade validation
-│   │   └── approval.ts       # Token handling
-│   └── providers/
-│       ├── alpaca/           # Broker client
-│       └── llm/              # OpenAI client
-│
-├── dashboard/                # React dashboard
-│
-├── docs/                     # Documentation site
-│
-└── migrations/               # D1 database
-    </pre>
-
-    <div class="footer">
-      <a href="./index.html">Home</a>
-      <a href="./harness.html">Harness</a>
-      <a href="./configuration.html">Config</a>
-      <a href="https://github.com/ygwyg/MAHORAGA">GitHub</a>
-      <a href="https://discord.gg/Ys8KpsW5NN">Discord</a>
-    </div>
+│   │   └── agent.ts            # MCP tool definitions
+│   ├── policy/                 # Trade validation & risk
+│   ├── providers/
+│   │   ├── alpaca/             # Alpaca broker client
+│   │   ├── llm/                # LLM providers (OpenAI, AI SDK)
+│   │   └── social/             # StockTwits, Reddit scrapers
+│   ├── storage/                # D1 and KV storage
+│   └── schemas/                # Config schemas
+├── dashboard/                  # React dashboard
+├── docs/                       # This documentation
+└── migrations/                 # D1 database migrations
+      </pre>
+    </main>
   </div>
 </body>
 </html>

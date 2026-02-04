@@ -12,7 +12,12 @@
     "db:migrate:remote": "wrangler d1 migrations apply mahoraga-db --remote",
     "db:studio": "wrangler d1 execute mahoraga-db --local --command 'SELECT 1'",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "biome lint src/",
+    "lint:fix": "biome lint --write src/",
+    "format": "biome format --write src/",
+    "format:check": "biome format src/",
+    "check": "biome check src/",
+    "check:fix": "biome check --write src/",
     "test": "vitest",
     "test:run": "vitest run",
     "setup:access": "npx tsx scripts/setup-access.ts"
@@ -33,6 +38,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
     "@cloudflare/workers-types": "^4.20241218.0",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",

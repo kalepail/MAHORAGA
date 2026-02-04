@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { AgentConfigSchema, validateAgentConfig, safeValidateAgentConfig } from "./agent-config";
+import { describe, expect, it } from "vitest";
+import { AgentConfigSchema, safeValidateAgentConfig, validateAgentConfig } from "./agent-config";
 
 function createValidConfig() {
   return {
@@ -9,7 +9,6 @@ function createValidConfig() {
     max_positions: 5,
     min_sentiment_score: 0.3,
     min_analyst_confidence: 0.6,
-    sell_sentiment_threshold: -0.2,
     take_profit_pct: 10,
     stop_loss_pct: 5,
     position_size_pct_of_cash: 10,
@@ -20,15 +19,12 @@ function createValidConfig() {
     stale_mid_hold_days: 3,
     stale_mid_min_gain_pct: 2,
     stale_social_volume_decay: 0.3,
-    stale_no_mentions_hours: 12,
     llm_provider: "openai-raw" as const,
     llm_model: "gpt-4o-mini",
     llm_analyst_model: "gpt-4o",
-    llm_max_tokens: 4000,
     options_enabled: false,
     options_min_confidence: 0.8,
     options_max_pct_per_trade: 0.02,
-    options_max_total_exposure: 0.1,
     options_min_dte: 30,
     options_max_dte: 60,
     options_target_delta: 0.5,
@@ -36,7 +32,6 @@ function createValidConfig() {
     options_max_delta: 0.7,
     options_stop_loss_pct: 50,
     options_take_profit_pct: 100,
-    options_max_positions: 3,
     crypto_enabled: false,
     crypto_symbols: ["BTC/USD", "ETH/USD"],
     crypto_momentum_threshold: 2.0,
@@ -145,7 +140,7 @@ describe("AgentConfigSchema", () => {
       const result = AgentConfigSchema.safeParse(config);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues.some(i => i.path.includes("options_min_delta"))).toBe(true);
+        expect(result.error.issues.some((i) => i.path.includes("options_min_delta"))).toBe(true);
       }
     });
 

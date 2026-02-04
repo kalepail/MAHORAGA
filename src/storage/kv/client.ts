@@ -11,11 +11,7 @@ export class KVClient {
     return this.kv.get(key, "text");
   }
 
-  async set<T = unknown>(
-    key: string,
-    value: T,
-    ttlSeconds?: number
-  ): Promise<void> {
+  async set<T = unknown>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     const options: KVNamespacePutOptions = {};
     if (ttlSeconds) {
       options.expirationTtl = ttlSeconds;
@@ -23,11 +19,7 @@ export class KVClient {
     await this.kv.put(key, JSON.stringify(value), options);
   }
 
-  async setString(
-    key: string,
-    value: string,
-    ttlSeconds?: number
-  ): Promise<void> {
+  async setString(key: string, value: string, ttlSeconds?: number): Promise<void> {
     const options: KVNamespacePutOptions = {};
     if (ttlSeconds) {
       options.expirationTtl = ttlSeconds;
@@ -44,11 +36,7 @@ export class KVClient {
     return result.keys.map((k) => k.name);
   }
 
-  async getOrSet<T>(
-    key: string,
-    factory: () => Promise<T>,
-    ttlSeconds?: number
-  ): Promise<T> {
+  async getOrSet<T>(key: string, factory: () => Promise<T>, ttlSeconds?: number): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached !== null) {
       return cached;

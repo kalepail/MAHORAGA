@@ -1,11 +1,6 @@
 import { createError, ErrorCode } from "../lib/errors";
 
-const ALLOWED_DOMAINS = [
-  "finance.yahoo.com",
-  "www.sec.gov",
-  "stockanalysis.com",
-  "companiesmarketcap.com",
-];
+const ALLOWED_DOMAINS = ["finance.yahoo.com", "www.sec.gov", "stockanalysis.com", "companiesmarketcap.com"];
 
 const MAX_CONTENT_SIZE = 500_000;
 const TIMEOUT_MS = 10_000;
@@ -22,9 +17,7 @@ export interface ScrapeResult {
 export function isAllowedDomain(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return ALLOWED_DOMAINS.some(
-      (d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`)
-    );
+    return ALLOWED_DOMAINS.some((d) => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`));
   } catch {
     return false;
   }
@@ -32,10 +25,7 @@ export function isAllowedDomain(url: string): boolean {
 
 export async function scrapeUrl(url: string): Promise<ScrapeResult> {
   if (!isAllowedDomain(url)) {
-    throw createError(
-      ErrorCode.FORBIDDEN,
-      `Domain not allowed. Allowed domains: ${ALLOWED_DOMAINS.join(", ")}`
-    );
+    throw createError(ErrorCode.FORBIDDEN, `Domain not allowed. Allowed domains: ${ALLOWED_DOMAINS.join(", ")}`);
   }
 
   const controller = new AbortController();
@@ -53,18 +43,12 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw createError(
-        ErrorCode.PROVIDER_ERROR,
-        `Failed to fetch ${url}: ${response.status}`
-      );
+      throw createError(ErrorCode.PROVIDER_ERROR, `Failed to fetch ${url}: ${response.status}`);
     }
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      throw createError(
-        ErrorCode.INVALID_INPUT,
-        `Invalid content type: ${contentType}. Only HTML/text allowed.`
-      );
+      throw createError(ErrorCode.INVALID_INPUT, `Invalid content type: ${contentType}. Only HTML/text allowed.`);
     }
 
     let html = await response.text();
@@ -143,18 +127,17 @@ function decodeHtmlEntities(text: string): string {
     result = result.split(entity).join(char);
   }
 
-  result = result.replace(/&#(\d+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 10))
-  );
+  result = result.replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
 
-  result = result.replace(/&#x([0-9a-f]+);/gi, (_, code) =>
-    String.fromCharCode(parseInt(code, 16))
-  );
+  result = result.replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
 
   return result;
 }
 
-export function extractFinancialData(text: string, symbol: string): {
+export function extractFinancialData(
+  text: string,
+  symbol: string
+): {
   mentions: number;
   priceReferences: string[];
   percentChanges: string[];

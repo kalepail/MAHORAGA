@@ -1,12 +1,7 @@
-
-
 export class D1Client {
   constructor(private db: D1Database) {}
 
-  async execute<T = unknown>(
-    query: string,
-    params: unknown[] = []
-  ): Promise<T[]> {
+  async execute<T = unknown>(query: string, params: unknown[] = []): Promise<T[]> {
     const result = await this.db
       .prepare(query)
       .bind(...params)
@@ -14,10 +9,7 @@ export class D1Client {
     return result.results;
   }
 
-  async executeOne<T = unknown>(
-    query: string,
-    params: unknown[] = []
-  ): Promise<T | null> {
+  async executeOne<T = unknown>(query: string, params: unknown[] = []): Promise<T | null> {
     const result = await this.db
       .prepare(query)
       .bind(...params)
@@ -26,7 +18,10 @@ export class D1Client {
   }
 
   async run(query: string, params: unknown[] = []): Promise<D1Result> {
-    return this.db.prepare(query).bind(...params).run();
+    return this.db
+      .prepare(query)
+      .bind(...params)
+      .run();
   }
 
   async batch(statements: D1PreparedStatement[]): Promise<D1Result[]> {

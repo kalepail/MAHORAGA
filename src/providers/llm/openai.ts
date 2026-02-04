@@ -1,5 +1,5 @@
 import { createError, ErrorCode } from "../../lib/errors";
-import type { LLMProvider, CompletionParams, CompletionResult } from "../types";
+import type { CompletionParams, CompletionResult, LLMProvider } from "../types";
 
 export interface OpenAIConfig {
   apiKey: string;
@@ -31,7 +31,7 @@ export class OpenAIProvider implements LLMProvider {
   constructor(config: OpenAIConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model ?? "gpt-4o-mini";
-    this.baseUrl = config.baseUrl ?? "https://api.openai.com/v1";
+    this.baseUrl = (config.baseUrl ?? "https://api.openai.com/v1").trim().replace(/\/+$/, "");
   }
 
   async complete(params: CompletionParams): Promise<CompletionResult> {
@@ -57,10 +57,7 @@ export class OpenAIProvider implements LLMProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw createError(
-        ErrorCode.PROVIDER_ERROR,
-        `OpenAI API error (${response.status}): ${errorText}`
-      );
+      throw createError(ErrorCode.PROVIDER_ERROR, `OpenAI API error (${response.status}): ${errorText}`);
     }
 
     const data = (await response.json()) as OpenAIResponse;

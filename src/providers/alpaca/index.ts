@@ -1,9 +1,9 @@
-import { createAlpacaClient, type AlpacaClientConfig } from "./client";
-import { createAlpacaTradingProvider, AlpacaTradingProvider } from "./trading";
-import { createAlpacaMarketDataProvider, AlpacaMarketDataProvider } from "./market-data";
-import { createAlpacaOptionsProvider, AlpacaOptionsProvider } from "./options";
-import { parseBoolean } from "../../lib/utils";
 import type { Env } from "../../env.d";
+import { parseBoolean } from "../../lib/utils";
+import { type AlpacaClientConfig, createAlpacaClient } from "./client";
+import { type AlpacaMarketDataProvider, createAlpacaMarketDataProvider } from "./market-data";
+import { type AlpacaOptionsProvider, createAlpacaOptionsProvider } from "./options";
+import { type AlpacaTradingProvider, createAlpacaTradingProvider } from "./trading";
 
 export interface AlpacaProviders {
   trading: AlpacaTradingProvider;
@@ -27,6 +27,6 @@ export function createAlpacaProviders(env: Env): AlpacaProviders {
   };
 }
 
-export { AlpacaTradingProvider } from "./trading";
-export { AlpacaMarketDataProvider } from "./market-data";
 export { AlpacaClient, createAlpacaClient } from "./client";
+export { AlpacaMarketDataProvider } from "./market-data";
+export { AlpacaTradingProvider } from "./trading";
