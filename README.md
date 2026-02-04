@@ -4,7 +4,7 @@
 
 An autonomous, LLM-powered trading agent that runs 24/7 on Cloudflare Workers.
 
-[![Discord](https://img.shields.io/discord/1467592472158015553?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/Ys8KpsW5NN)
+[![Discord](https://img.shields.io/discord/1467592472158015553?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/vMFnHe2YBh)
 
 MAHORAGA monitors social sentiment from StockTwits and Reddit, uses AI (OpenAI, Anthropic, Google, xAI, DeepSeek via AI SDK) to analyze signals, and executes trades through Alpaca. It runs as a Cloudflare Durable Object with persistent state, automatic restarts, and 24/7 crypto trading support.
 
@@ -297,7 +297,7 @@ mahoraga/
 
 Join our Discord for help and discussion:
 
-**[Discord Server](https://discord.gg/Ys8KpsW5NN)**
+**[Discord Server](https://discord.gg/vMFnHe2YBh)**
 
 ## Disclaimer
 
