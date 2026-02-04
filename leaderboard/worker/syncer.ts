@@ -37,7 +37,8 @@ export interface SyncResult {
 /** Row type for stored incremental counting data. */
 interface TraderIncrementalRow {
   lifetime_trade_count: number | null;
-  last_count_order_created_at: string | null;
+  last_count_order_submitted_at: string | null;
+  last_count_order_id: string | null;
 }
 
 export class SyncerDO extends DurableObject<Env> {
@@ -51,7 +52,7 @@ export class SyncerDO extends DurableObject<Env> {
       // Fetch stored incremental counting data
       // ---------------------------------------------------------------
       const storedCounts = await this.env.DB.prepare(
-        `SELECT lifetime_trade_count, last_count_order_created_at FROM traders WHERE id = ?1`
+        `SELECT lifetime_trade_count, last_count_order_submitted_at, last_count_order_id FROM traders WHERE id = ?1`
       ).bind(traderId).first<TraderIncrementalRow>();
 
       // ---------------------------------------------------------------
@@ -81,24 +82,30 @@ export class SyncerDO extends DurableObject<Env> {
       // the partial count and continue from there on the next sync. This
       // ensures bounded API calls even for hyperactive traders.
       //
-      // Deduping: The 'after' parameter is exclusive, so using the exact
-      // timestamp of the last counted order means no double-counting.
+      // Deduping: Uses "back up and anchor" strategy — subtract 1s from
+      // checkpoint timestamp and use order ID as the deterministic anchor.
       // ---------------------------------------------------------------
 
       let filledCount: number;
-      let newLastCountOrderCreatedAt: string | null;
+      let newLastCountOrderSubmittedAt: string | null;
+      let newLastCountOrderId: string | null;
 
       // Check if we have stored incremental counting data
       const storedLifetimeCount = storedCounts?.lifetime_trade_count;
-      const storedLastOrderCreatedAt = storedCounts?.last_count_order_created_at;
+      const storedLastOrderSubmittedAt = storedCounts?.last_count_order_submitted_at;
+      const storedLastOrderId = storedCounts?.last_count_order_id;
 
       if (storedLifetimeCount !== null && storedLifetimeCount !== undefined &&
-          storedLastOrderCreatedAt !== null && storedLastOrderCreatedAt !== undefined) {
-        // Incremental count: only fetch orders created after last count
-        // Uses ASC pagination so we can continue from where we stopped
+          storedLastOrderSubmittedAt !== null && storedLastOrderSubmittedAt !== undefined) {
+        // Incremental count: "back up and anchor" approach.
+        // We subtract 1s from the checkpoint timestamp (safety buffer), fetch
+        // orders from there ASC, find the anchor order by ID, and only count
+        // filled orders that come AFTER it. Fully deterministic — no timestamp
+        // precision issues, no double-counting.
         const incrementalResult = await fetchFilledOrderCountSince(
           accessToken,
-          storedLastOrderCreatedAt,
+          storedLastOrderSubmittedAt,
+          storedLastOrderId ?? "",
           10 // Max 10 pages = 5000 new orders
         );
 
@@ -109,8 +116,10 @@ export class SyncerDO extends DurableObject<Env> {
         // Because we paginate ASC (oldest→newest), this is always safe:
         // - If we finished: checkpoint is the newest order, we're caught up
         // - If we hit limit: checkpoint is where we stopped, next sync continues from there
-        newLastCountOrderCreatedAt = incrementalResult.lastProcessedOrderCreatedAt ??
-                                     storedLastOrderCreatedAt;
+        newLastCountOrderSubmittedAt = incrementalResult.lastProcessedOrderSubmittedAt ??
+                                       storedLastOrderSubmittedAt;
+        newLastCountOrderId = incrementalResult.lastProcessedOrderId ??
+                              storedLastOrderId ?? null;
 
         if (incrementalResult.hitPageLimit) {
           console.log(`[syncer] Trader ${traderId}: incremental count hit page limit (counted ${incrementalResult.newCount} new), will continue from checkpoint next sync`);
@@ -119,7 +128,8 @@ export class SyncerDO extends DurableObject<Env> {
         // No stored count — do full count
         const fullResult = await fetchTotalFilledOrderCount(accessToken);
         filledCount = fullResult.count;
-        newLastCountOrderCreatedAt = fullResult.newestOrderCreatedAt;
+        newLastCountOrderSubmittedAt = fullResult.newestOrderSubmittedAt;
+        newLastCountOrderId = fullResult.newestOrderId;
       }
 
       // ---------------------------------------------------------------
@@ -312,9 +322,10 @@ export class SyncerDO extends DurableObject<Env> {
              asset_class = ?2,
              last_trade_at = ?3,
              lifetime_trade_count = ?4,
-             last_count_order_created_at = ?5
+             last_count_order_submitted_at = ?5,
+             last_count_order_id = ?6
            WHERE id = ?1`
-        ).bind(traderId, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderCreatedAt)
+        ).bind(traderId, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
       );
 
       await this.env.DB.batch(statements);

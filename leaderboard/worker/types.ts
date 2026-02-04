@@ -23,7 +23,8 @@ export interface TraderDbRow {
   last_failure_reason: string | null; // debug info for why sync is failing
   // Incremental trade counting (to avoid paginating ALL orders every sync)
   lifetime_trade_count: number | null;         // running total of filled orders
-  last_count_order_created_at: string | null;  // created_at of newest counted order
+  last_count_order_submitted_at: string | null; // submitted_at of newest counted order
+  last_count_order_id: string | null;          // ID of newest counted order (dedup)
 }
 
 export interface OAuthTokenDbRow {

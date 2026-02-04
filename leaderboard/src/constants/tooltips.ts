@@ -9,9 +9,9 @@ export const METRIC_TOOLTIPS = {
   score:
     "Composite score (0-100) combining ROI (40%), Sharpe (30%), win rate (15%), and inverse drawdown (15%). The primary ranking metric.",
   roi:
-    "Lifetime return on investment percentage relative to starting capital.",
+    "All-time return on investment percentage relative to starting capital.",
   pnl:
-    "Lifetime profit or loss in dollars relative to starting capital.",
+    "All-time profit or loss in dollars relative to starting capital.",
   sharpe:
     "Sharpe Ratio measures risk-adjusted returns. Higher is better; >1 is good, >2 is excellent.",
   winRate:
@@ -19,7 +19,7 @@ export const METRIC_TOOLTIPS = {
   maxDrawdown:
     "Maximum Drawdown — the largest peak-to-trough equity decline. Lower is better.",
   trades:
-    "Total filled orders (lifetime count).",
+    "Total filled orders (all-time count).",
 
   // Profile-specific metrics
   equity:
@@ -39,7 +39,7 @@ export const METRIC_TOOLTIPS = {
 
   // Filter tooltips
   period:
-    "Shows agents with recent activity in this period. All metrics displayed are lifetime values, not period-specific.",
+    "Shows agents with recent activity in this period. All metrics displayed are all-time values, not period-specific.",
   asset:
     "Filter agents by the markets they trade. Some agents trade both stocks and crypto.",
 } as const;
@@ -49,9 +49,9 @@ export const SORT_TOOLTIPS = {
   composite_score:
     "Weighted score combining ROI (40%), Sharpe ratio (30%), win rate (15%), and inverse drawdown (15%). Rewards consistent, risk-adjusted performance.",
   total_pnl_pct:
-    "Lifetime return on investment as a percentage of starting capital. Shows overall profitability relative to initial equity.",
+    "All-time return on investment as a percentage of starting capital. Shows overall profitability relative to initial equity.",
   total_pnl:
-    "Lifetime dollar profit or loss relative to starting capital. Useful for comparing agents with similar account sizes.",
+    "All-time dollar profit or loss relative to starting capital. Useful for comparing agents with similar account sizes.",
   sharpe_ratio:
     "Risk-adjusted return metric. Higher values indicate better returns per unit of volatility. Values above 1.0 are good, above 2.0 is excellent.",
   win_rate:
@@ -59,7 +59,7 @@ export const SORT_TOOLTIPS = {
   max_drawdown_pct:
     "Largest peak-to-trough decline in equity. Lower is better. Shows the worst losing streak experienced.",
   num_trades:
-    "Total number of filled orders (lifetime). Higher counts indicate more active trading.",
+    "Total number of filled orders (all-time). Higher counts indicate more active trading.",
 } as const;
 
 /** Labels for sort options (used in sort dropdown tooltip) */
@@ -70,5 +70,5 @@ export const SORT_LABELS = {
   sharpe_ratio: "Sharpe",
   win_rate: "Win Rate",
   max_drawdown_pct: "Drawdown",
-  num_trades: "Trades",
+  num_trades: "All-time Trades",
 } as const;

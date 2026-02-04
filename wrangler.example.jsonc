@@ -7,6 +7,9 @@
 		"nodejs_compat"
 	],
 	"vars": {
+		"ALPACA_PAPER": "true",
+		"LLM_PROVIDER": "openai-raw",
+		"LLM_MODEL": "gpt-4o-mini",
 		"ENVIRONMENT": "production",
 		"FEATURE_LLM_RESEARCH": "true",
 		"FEATURE_OPTIONS": "true",

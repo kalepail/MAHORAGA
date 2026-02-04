@@ -12,7 +12,11 @@ CREATE TABLE IF NOT EXISTS traders (
   sync_tier INTEGER NOT NULL DEFAULT 4,
   last_trade_at TEXT,
   first_failure_at TEXT,        -- when failure streak started (7-day grace period)
-  last_failure_reason TEXT      -- debug info for why sync is failing
+  last_failure_reason TEXT,     -- debug info for why sync is failing
+  -- Incremental trade counting (to avoid paginating ALL orders every sync)
+  lifetime_trade_count INTEGER,        -- running total of filled orders
+  last_count_order_submitted_at TEXT,  -- submitted_at checkpoint
+  last_count_order_id TEXT             -- order ID for dedup (Alpaca `after` is inclusive)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_username ON traders(username);

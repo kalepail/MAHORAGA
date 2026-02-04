@@ -252,14 +252,16 @@ export async function fetchClosedOrders(
 /** Result of a full trade count operation. */
 export interface FullTradeCountResult {
   count: number;
-  /** created_at of the newest order, used for subsequent incremental counts. */
-  newestOrderCreatedAt: string | null;
+  /** submitted_at of the newest order, used for subsequent incremental counts. */
+  newestOrderSubmittedAt: string | null;
+  /** ID of the newest order, used to skip it in subsequent incremental counts. */
+  newestOrderId: string | null;
 }
 
 /**
  * Fetch total number of closed (filled) orders. Paginates through ALL orders.
  *
- * Returns both the count and the newest order's created_at timestamp,
+ * Returns both the count and the newest order's submitted_at timestamp,
  * which can be used for subsequent incremental counting.
  *
  * WARNING: This can make many API calls for accounts with thousands of trades.
@@ -270,7 +272,8 @@ export async function fetchTotalFilledOrderCount(
 ): Promise<FullTradeCountResult> {
   let total = 0;
   let until: string | null = null;
-  let newestOrderCreatedAt: string | null = null;
+  let newestOrderSubmittedAt: string | null = null;
+  let newestOrderId: string | null = null;
 
   for (;;) {
     const params = new URLSearchParams({
@@ -291,9 +294,10 @@ export async function fetchTotalFilledOrderCount(
     const orders = (await res.json()) as Record<string, unknown>[];
     if (orders.length === 0) break;
 
-    // On first page, capture the newest order's created_at
-    if (newestOrderCreatedAt === null && orders.length > 0) {
-      newestOrderCreatedAt = orders[0].created_at as string;
+    // On first page, capture the newest order's submitted_at and ID
+    if (newestOrderSubmittedAt === null && orders.length > 0) {
+      newestOrderSubmittedAt = extractOrderSubmittedAt(orders[0]);
+      newestOrderId = orders[0].id as string;
     }
 
     const filled = orders.filter((o) => o.status === "filled");
@@ -301,53 +305,73 @@ export async function fetchTotalFilledOrderCount(
 
     if (orders.length < 500) break;
 
-    // Use the oldest order's created_at as the `until` for the next page
-    until = orders[orders.length - 1].created_at as string;
+    // Use the oldest order's submitted_at as the `until` for the next page
+    until = extractOrderSubmittedAt(orders[orders.length - 1]);
   }
 
-  return { count: total, newestOrderCreatedAt };
+  return { count: total, newestOrderSubmittedAt, newestOrderId };
 }
 
 /** Result of an incremental trade count operation. */
 export interface IncrementalTradeCountResult {
-  /** Number of new filled orders since the 'after' timestamp. */
+  /** Number of new filled orders since the anchor. */
   newCount: number;
-  /** created_at of the last order we processed. Use this as the next 'after' value. */
-  lastProcessedOrderCreatedAt: string | null;
+  /** submitted_at of the last order we processed. Use this as the next 'after' value. */
+  lastProcessedOrderSubmittedAt: string | null;
+  /** ID of the last order we processed. Used as the anchor in the next incremental call. */
+  lastProcessedOrderId: string | null;
   /** True if we hit the page limit. Count is still accurate for orders processed. */
   hitPageLimit: boolean;
 }
 
 /**
- * Fetch count of filled orders created AFTER a given timestamp.
+ * Fetch count of filled orders submitted after a known anchor order.
  *
  * Used for incremental trade counting: instead of paginating through ALL orders
- * every sync, we only count new orders since the last sync.
+ * every sync, we store a running total and only count new orders since last sync.
  *
- * IMPORTANT: Paginates in ASCENDING order (oldest → newest). This ensures that
- * when we hit the page limit, we can continue from `lastProcessedOrderCreatedAt`
- * on the next sync without gaps or duplicates. The 'after' parameter is exclusive.
+ * Strategy — "back up and anchor":
+ *   1. Subtract 1 second from the stored timestamp to create a safety buffer.
+ *      This ensures we never miss orders due to Alpaca's sub-millisecond
+ *      timestamp precision issues or `after` param quirks.
+ *   2. Fetch orders from that buffered start point (ASC, oldest → newest).
+ *   3. Scan forward until we find the anchor order (by ID). Everything before
+ *      and including the anchor was already counted — skip it.
+ *   4. Count filled orders that come AFTER the anchor. These are genuinely new.
+ *
+ * This is fully deterministic: the order ID is the source of truth, not
+ * timestamps. No precision issues, no double-counting, no missed orders.
  *
  * @param token - Alpaca access token
- * @param after - ISO 8601 timestamp. Only orders created AFTER this (exclusive) are counted.
+ * @param afterTimestamp - submitted_at of the last counted order (we subtract 1s for buffer)
+ * @param anchorOrderId - ID of the last counted order (our dedup anchor point)
  * @param maxPages - Safety limit on pagination (default 10 = 5000 orders max)
- * @returns Count of new filled orders, last processed timestamp, and whether page limit was hit
  */
 export async function fetchFilledOrderCountSince(
   token: string,
-  after: string,
+  afterTimestamp: string,
+  anchorOrderId: string,
   maxPages = 10
 ): Promise<IncrementalTradeCountResult> {
+  // Back up by 1 second so timestamp precision issues can never cause us
+  // to miss orders. The anchor ID is the real boundary, not the timestamp.
+  const bufferedAfter = new Date(
+    new Date(afterTimestamp).getTime() - 1000
+  ).toISOString();
+
   let newCount = 0;
-  let lastProcessedOrderCreatedAt: string | null = null;
-  let currentAfter = after;
+  let lastProcessedOrderSubmittedAt: string | null = null;
+  let lastProcessedOrderId: string | null = null;
+  let foundAnchor = false;
+  let currentAfter = bufferedAfter;
+  let prevPageLastId: string | null = null; // for page-boundary dedup
   let pageCount = 0;
 
   for (; pageCount < maxPages; pageCount++) {
     const params = new URLSearchParams({
       status: "closed",
       limit: "500",
-      direction: "asc", // Oldest first — so we can continue from where we stopped
+      direction: "asc",
       after: currentAfter,
     });
 
@@ -362,24 +386,58 @@ export async function fetchFilledOrderCountSince(
     const orders = (await res.json()) as Record<string, unknown>[];
     if (orders.length === 0) break;
 
-    const filled = orders.filter((o) => o.status === "filled");
-    newCount += filled.length;
+    for (const order of orders) {
+      const orderId = order.id as string;
 
-    // Track the last (newest) order we processed — this becomes our next checkpoint
-    const lastOrder = orders[orders.length - 1];
-    lastProcessedOrderCreatedAt = lastOrder.created_at as string;
+      // Skip orders up to and including the anchor (already counted)
+      if (!foundAnchor) {
+        if (orderId === anchorOrderId) foundAnchor = true;
+        continue;
+      }
+
+      // Skip page-boundary order (Alpaca's `after` may re-include it)
+      if (orderId === prevPageLastId) continue;
+
+      // This is a genuinely new order
+      if (order.status === "filled") newCount++;
+      lastProcessedOrderSubmittedAt = extractOrderSubmittedAt(order);
+      lastProcessedOrderId = orderId;
+    }
 
     if (orders.length < 500) break;
 
-    // For next page, get orders after the last one we saw
-    currentAfter = lastProcessedOrderCreatedAt;
+    // Advance to next page; track last order for boundary dedup
+    const lastOrder = orders[orders.length - 1];
+    prevPageLastId = lastOrder.id as string;
+    currentAfter = extractOrderSubmittedAt(lastOrder);
+  }
+
+  if (!foundAnchor) {
+    // Anchor order not found in the buffer window. This should be extremely
+    // rare (would require the order to vanish or >5000 orders in 1 second).
+    // Return 0 new orders so the count doesn't inflate. The next full recount
+    // (triggered by cron or manual reset) will correct it.
+    console.error(`[alpaca] fetchFilledOrderCountSince: anchor order ${anchorOrderId} not found in buffer window, returning 0 new`);
+    return {
+      newCount: 0,
+      lastProcessedOrderSubmittedAt: null,
+      lastProcessedOrderId: null,
+      hitPageLimit: false,
+    };
   }
 
   return {
     newCount,
-    lastProcessedOrderCreatedAt,
+    lastProcessedOrderSubmittedAt,
+    lastProcessedOrderId,
     hitPageLimit: pageCount >= maxPages,
   };
+}
+
+function extractOrderSubmittedAt(order: Record<string, unknown>): string {
+  const submitted = order.submitted_at as string | undefined;
+  const created = order.created_at as string | undefined;
+  return submitted ?? created ?? new Date(0).toISOString();
 }
 
 // ---------------------------------------------------------------------------

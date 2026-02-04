@@ -33,7 +33,7 @@ const SORTS: { value: SortField; label: string }[] = [
   { value: "sharpe_ratio", label: "Sharpe" },
   { value: "win_rate", label: "Win Rate" },
   { value: "max_drawdown_pct", label: "Drawdown" },
-  { value: "num_trades", label: "Trades" },
+  { value: "num_trades", label: "All-time Trades" },
 ];
 
 const ASSET_FILTERS: { value: AssetFilter; label: string }[] = [
@@ -194,7 +194,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
               </th>
               <th className="hud-label text-right px-4 py-3">
                 <span className="inline-flex items-center gap-1.5">
-                  Trades <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
+                  All-time Trades <InfoIcon tooltip={METRIC_TOOLTIPS.trades} />
                 </span>
               </th>
               <th className="hud-label text-right px-4 py-3 w-[100px]">
@@ -296,7 +296,7 @@ function StatsBar({ stats }: { stats: LeaderboardStats }) {
         </div>
       </div>
       <div className="hud-panel px-4 py-3">
-        <div className="hud-label">Total Trades</div>
+        <div className="hud-label">All-time Trades</div>
         <div className="hud-value-md mt-1 text-hud-text-bright">
           {stats.total_trades.toLocaleString()}
         </div>
