@@ -9,6 +9,13 @@
 		"directory": "./dist",
 		"not_found_handling": "single-page-application"
 	},
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"invocation_logs": false,
+			"head_sampling_rate": 1
+		}
+	},
 	"routes": [
 		{ "pattern": "dash.sukuna.dev", "custom_domain": true }
 	]
