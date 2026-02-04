@@ -14,7 +14,7 @@
 
 import { tierDelaySeconds, type SyncTier } from "./tiers";
 import { decryptToken } from "./crypto";
-import { invalidateTraderCache } from "./cache";
+
 import { isTransientFailure, markInactive, clearFailureState } from "./failure-handling";
 import type { SyncMessage, TraderWithTokenRow } from "./types";
 
@@ -70,8 +70,7 @@ export async function processSyncMessage(
     // 4a. Success: clear failure state (auto-recovery if was inactive)
     message.ack();
     await clearFailureState(env, traderId);
-    try { await invalidateTraderCache(env, row.username); }
-    catch (err) { console.error(`[queue] Cache invalidation failed for ${row.username}:`, err instanceof Error ? err.message : err); }
+    // Trader cache entries use 5-min TTL and expire naturally — no manual invalidation needed.
     await safeReEnqueue(env, traderId, tier);
   } else if (isTransientFailure(result.alpacaStatus)) {
     // 4b. Transient failure (5xx, 429): retry with backoff, don't change is_active

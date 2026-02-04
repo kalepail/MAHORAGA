@@ -137,23 +137,10 @@ export function leaderboardCacheKey(
 }
 
 // ---------------------------------------------------------------------------
-// Targeted invalidation helpers
+// Cache invalidation strategy
 // ---------------------------------------------------------------------------
-
-/** Invalidate a single trader's profile, trades, and equity caches after sync. */
-export async function invalidateTraderCache(
-  env: Env,
-  username: string
-): Promise<void> {
-  // All trader cache keys use the pattern trader:{username}:*
-  // The trailing colon prevents prefix collisions (e.g., "foo" won't match "foobar")
-  const list = await env.KV.list({ prefix: `trader:${username}:` });
-  await Promise.all(list.keys.map((key) => env.KV.delete(key.name)));
-}
-
-/** Invalidate all leaderboard-prefixed caches (leaderboard views + stats). */
-export async function invalidateLeaderboardCaches(env: Env): Promise<void> {
-  const list = await env.KV.list({ prefix: "leaderboard:" });
-  await Promise.all(list.keys.map((key) => env.KV.delete(key.name)));
-}
+// All KV entries use TTLs (15 min for leaderboard, 5 min for trader data).
+// Stale entries expire naturally — no manual list+delete needed.
+// The cron pre-warm overwrites the default leaderboard key with fresh data.
+// Read-through caching overwrites keys on cache miss.
 

@@ -321,6 +321,8 @@ export class SyncerDO extends DurableObject<Env> {
       //    Used for the asset class filter on the leaderboard (stocks/crypto/all).
       const derivedAssetClass = deriveTraderAssetClass(positions, recentOrders);
 
+      const syncedAt = dbNow();
+
       // Update trader metadata including last_trade_at and incremental counting fields
       statements.push(
         this.env.DB.prepare(
@@ -332,14 +334,14 @@ export class SyncerDO extends DurableObject<Env> {
              last_count_order_submitted_at = ?6,
              last_count_order_id = ?7
            WHERE id = ?1`
-        ).bind(traderId, dbNow(), derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
+        ).bind(traderId, syncedAt, derivedAssetClass, lastTradeAt, filledCount, newLastCountOrderSubmittedAt, newLastCountOrderId)
       );
 
       // Record last successful API usage timestamp
       statements.push(
         this.env.DB.prepare(
           `UPDATE oauth_tokens SET last_used_at = ?2 WHERE trader_id = ?1`
-        ).bind(traderId, dbNow())
+        ).bind(traderId, syncedAt)
       );
 
       await this.env.DB.batch(statements);

@@ -24,7 +24,7 @@ import {
   leaderboardCacheKey,
 } from "./cache";
 import { json, safeParseInt, errorJson } from "./helpers";
-import { dbNow } from "./dates";
+import { dbNow, dbTimeAgo } from "./dates";
 import { SORT_FIELDS } from "./constants";
 import type {
   SyncMessage,
@@ -78,16 +78,17 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 100), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
-  // Validate sort column before building cache key (prevents KV pollution
-  // from arbitrary query params like ?sort=evil_column).
+  // Validate sort/dir before building cache key to prevent KV pollution.
   const validSort = (SORT_FIELDS as readonly string[]).includes(sort) ? sort : "composite_score";
   const validDir = (["asc", "desc"] as const).includes(sortDir as "asc" | "desc") ? sortDir : "desc";
 
-  // Check KV cache (only for first page requests)
-  const cacheKey = leaderboardCacheKey(validSort, validDir, minTrades);
-  const isFirstPage = offset === 0 && limit === 100;
+  // Only cache first-page requests with minTrades=0 (the default).
+  // Arbitrary minTrades values still query D1 but bypass KV to prevent
+  // unbounded cache key growth. TTLs handle expiration — no manual delete needed.
+  const isCacheable = offset === 0 && limit === 100 && minTrades === 0;
+  const cacheKey = leaderboardCacheKey(validSort, validDir, 0);
 
-  if (isFirstPage) {
+  if (isCacheable) {
     const cached = await getCachedLeaderboard(env, cacheKey);
     if (cached) {
       return new Response(cached, {
@@ -100,13 +101,42 @@ export async function getLeaderboard(request: Request, env: Env): Promise<Respon
     sort: validSort, sortDir: validDir, minTrades, limit, offset,
   });
 
-  // Write-through cache for first page requests
-  if (isFirstPage) {
+  // Write-through cache for cacheable requests
+  if (isCacheable) {
     try { await setCachedLeaderboard(env, cacheKey, data); }
     catch (err) { console.error("[api] Cache write failed for leaderboard:", err instanceof Error ? err.message : err); }
   }
 
   return json(data);
+}
+
+/**
+ * Build cascading tiebreaker ORDER BY clauses.
+ * Priority: Score → P&L$ → ROI% → Sharpe → Win Rate → MDD → Trades → id
+ * Skips whichever column is the primary sort. NULLs sort last (DESC uses
+ * low sentinel, ASC for MDD uses high sentinel). Final tiebreaker is t.id
+ * for deterministic pagination.
+ */
+function buildTiebreakers(primaryCol: string): string {
+  // Each entry: [column, direction, COALESCE sentinel for NULLs-last]
+  const cascade: [string, string, number][] = [
+    ["composite_score", "DESC", -999999],
+    ["total_pnl", "DESC", -999999],
+    ["total_pnl_pct", "DESC", -999999],
+    ["sharpe_ratio", "DESC", -999999],
+    ["win_rate", "DESC", -999999],
+    ["max_drawdown_pct", "ASC", 999999999],
+    ["num_trades", "DESC", -999999],
+  ];
+
+  const clauses = cascade
+    .filter(([col]) => col !== primaryCol)
+    .map(([col, dir, sentinel]) => `COALESCE(ls.${col}, ${sentinel}) ${dir}`);
+
+  // Final deterministic tiebreaker
+  clauses.push("t.id ASC");
+
+  return clauses.join(",\n      ");
 }
 
 export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) {
@@ -149,7 +179,7 @@ export async function queryLeaderboard(env: Env, opts: LeaderboardQueryOptions) 
     LEFT JOIN latest_snapshots ls ON ls.trader_id = t.id AND ls.rn = 1
     WHERE t.is_active = 1 AND (ls.trader_id IS NULL OR COALESCE(ls.num_trades, 0) >= ?1)
     ORDER BY ${sortDir === "ASC" ? `COALESCE(ls.${sortCol}, 999999999)` : `COALESCE(ls.${sortCol}, -999999)`} ${sortDir},
-      ${sortCol === "total_pnl_pct" ? "COALESCE(ls.num_trades, 0) DESC" : "COALESCE(ls.total_pnl_pct, -999999) DESC"}
+      ${buildTiebreakers(sortCol)}
     LIMIT ?2 OFFSET ?3
   `;
 
@@ -277,11 +307,16 @@ export async function getTraderTrades(
   const limit = Math.min(safeParseInt(url.searchParams.get("limit"), 50), 100);
   const offset = safeParseInt(url.searchParams.get("offset"), 0);
 
-  const cached = await getCachedTraderTrades(env, username, limit, offset);
-  if (cached) {
-    return new Response(cached, {
-      headers: { "Content-Type": "application/json" },
-    });
+  // Only cache first page (offset=0) to prevent unbounded KV keys from arbitrary offsets
+  const isCacheable = offset === 0;
+
+  if (isCacheable) {
+    const cached = await getCachedTraderTrades(env, username, limit, offset);
+    if (cached) {
+      return new Response(cached, {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   const traderId = await getActiveTraderIdByUsername(env, username);
@@ -294,8 +329,10 @@ export async function getTraderTrades(
   ).bind(traderId, limit, offset).all();
 
   const data = { trades: result.results, meta: { limit, offset } };
-  try { await setCachedTraderTrades(env, username, limit, offset, data); }
-  catch (err) { console.error(`[api] Cache write failed for trades ${username}:`, err instanceof Error ? err.message : err); }
+  if (isCacheable) {
+    try { await setCachedTraderTrades(env, username, limit, offset, data); }
+    catch (err) { console.error(`[api] Cache write failed for trades ${username}:`, err instanceof Error ? err.message : err); }
+  }
   return json(data);
 }
 
@@ -317,8 +354,8 @@ export async function getTraderEquity(
   const traderId = await getActiveTraderIdByUsername(env, username);
   if (!traderId) return json({ error: "Trader not found" }, 404);
 
-  // Security: Compute date boundary in JS to avoid SQL string concatenation.
-  const dateBoundary = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  // Compute date boundary in JS to avoid SQL string concatenation.
+  const dateBoundary = dbTimeAgo(days * 86400);
 
   const result = await env.DB.prepare(
     `SELECT timestamp, equity, profit_loss, profit_loss_pct

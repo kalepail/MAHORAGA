@@ -60,6 +60,24 @@ function SortIndicator({ isActive, dir }: { isActive: boolean; dir: SortDir }) {
 }
 
 // ---------------------------------------------------------------------------
+// Loading Spinner (replaces sort indicator while fetching)
+// Same 7×12 bounding box as SortIndicator to prevent layout shift.
+// ---------------------------------------------------------------------------
+
+function SortSpinner() {
+  return (
+    <svg
+      width="7"
+      height="12"
+      viewBox="0 0 7 12"
+      className="inline-block ml-0.5 shrink-0 animate-spin"
+    >
+      <circle cx="3.5" cy="6" r="3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="10 6" strokeLinecap="round" className="opacity-60" />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Sortable Header
 // ---------------------------------------------------------------------------
 
@@ -70,6 +88,7 @@ interface SortableHeaderProps {
   activeSort: SortField;
   activeDir: SortDir;
   onSort: (field: SortField) => void;
+  loading?: boolean;
 }
 
 function SortableHeader({
@@ -79,17 +98,24 @@ function SortableHeader({
   activeSort,
   activeDir,
   onSort,
+  loading,
 }: SortableHeaderProps) {
   const isActive = activeSort === field;
+  const disabled = !!loading;
   return (
     <th
-      className="hud-label text-right px-4 py-3 whitespace-nowrap cursor-pointer select-none hover:text-hud-text-bright transition-colors"
-      onClick={() => onSort(field)}
+      className={clsx(
+        "hud-label text-right px-4 py-3 whitespace-nowrap select-none transition-colors",
+        disabled
+          ? "cursor-default opacity-60"
+          : "cursor-pointer hover:text-hud-text-bright"
+      )}
+      onClick={disabled ? undefined : () => onSort(field)}
     >
       <span className="inline-flex items-center gap-1.5">
         <span className="inline-flex items-center mr-2"><InfoIcon tooltip={tooltip} /></span>
         {label}
-        <SortIndicator isActive={isActive} dir={activeDir} />
+        {isActive && loading ? <SortSpinner /> : <SortIndicator isActive={isActive} dir={activeDir} />}
       </span>
     </th>
   );
@@ -112,27 +138,20 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
   const abortRef = useRef<AbortController | null>(null);
 
   /**
-   * Sort toggle cycle:
-   * 1st click on a column → natural direction (DESC for most, ASC for MDD)
-   * 2nd click on same column → opposite direction
-   * 3rd click on same column → reset to default (composite_score DESC)
+   * Sort toggle:
+   * Click new column → natural direction (best-first: DESC for most, ASC for MDD)
+   * Click same column → flip direction
    */
   const handleColumnSort = useCallback(
     (field: SortField) => {
       if (sort !== field) {
-        // Clicking a new column: set to its natural direction
         setSort(field);
         setSortDir(NATURAL_DIR[field]);
-      } else if (sortDir === NATURAL_DIR[field]) {
-        // Same column, currently natural: flip direction
-        setSortDir(NATURAL_DIR[field] === "desc" ? "asc" : "desc");
       } else {
-        // Same column, already flipped: reset to default
-        setSort("composite_score");
-        setSortDir("desc");
+        setSortDir((prev) => (prev === "desc" ? "asc" : "desc"));
       }
     },
-    [sort, sortDir]
+    [sort]
   );
 
   const fetchLeaderboard = useCallback(async () => {
@@ -249,13 +268,13 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
                   <InfoIcon tooltip={METRIC_TOOLTIPS.agentBadge} />
                 </span>
               </th>
-              <SortableHeader label="Score" field="composite_score" tooltip={SORT_TOOLTIPS.composite_score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="P&L" field="total_pnl" tooltip={SORT_TOOLTIPS.total_pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={SORT_TOOLTIPS.sharpe_ratio} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="Win Rate" field="win_rate" tooltip={SORT_TOOLTIPS.win_rate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={SORT_TOOLTIPS.max_drawdown_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
-              <SortableHeader label="Trades" field="num_trades" tooltip={SORT_TOOLTIPS.num_trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} />
+              <SortableHeader label="Score" field="composite_score" tooltip={SORT_TOOLTIPS.composite_score} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="P&L" field="total_pnl" tooltip={SORT_TOOLTIPS.total_pnl} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="ROI %" field="total_pnl_pct" tooltip={SORT_TOOLTIPS.total_pnl_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Sharpe" field="sharpe_ratio" tooltip={SORT_TOOLTIPS.sharpe_ratio} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Win Rate" field="win_rate" tooltip={SORT_TOOLTIPS.win_rate} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="MDD" field="max_drawdown_pct" tooltip={SORT_TOOLTIPS.max_drawdown_pct} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
+              <SortableHeader label="Trades" field="num_trades" tooltip={SORT_TOOLTIPS.num_trades} activeSort={sort} activeDir={sortDir} onSort={handleColumnSort} loading={loading} />
               <th className="hud-label text-right px-4 py-3 whitespace-nowrap w-[100px]">
                 <span className="inline-flex items-center gap-1.5">
                   Equity Trend
@@ -264,8 +283,8 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
               </th>
             </tr>
           </thead>
-          <tbody>
-            {loading && (
+          <tbody className={clsx(loading && traders.length > 0 && "opacity-40 pointer-events-none transition-opacity")}>
+            {loading && traders.length === 0 && (
               <tr>
                 <td colSpan={10} className="px-4 py-12 text-center">
                   <span className="hud-label">Loading...</span>
@@ -304,7 +323,7 @@ export function Leaderboard({ navigate }: LeaderboardProps) {
                 </td>
               </tr>
             )}
-            {!loading &&
+            {(!loading || traders.length > 0) &&
               !error &&
               traders.map((trader, i) => (
                 <LeaderboardRow

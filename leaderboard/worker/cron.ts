@@ -13,10 +13,9 @@ import {
   setCachedLeaderboard,
   setCachedStats,
   leaderboardCacheKey,
-  invalidateLeaderboardCaches,
 } from "./cache";
 import { queryLeaderboard, queryStats } from "./api";
-import { dbTimeAgo } from "./dates";
+import { dbNow, dbTimeAgo } from "./dates";
 import type { SyncMessage, StaleTraderRow, ScoreRangesRow } from "./types";
 
 export async function runCronCycle(env: Env): Promise<void> {
@@ -345,11 +344,12 @@ async function reEnqueueStaleTraders(env: Env): Promise<void> {
 }
 
 async function rebuildCaches(env: Env): Promise<void> {
-  await invalidateLeaderboardCaches(env);
+  // No manual cache invalidation needed — all KV entries use TTLs (15 min for
+  // leaderboard, 5 min for trader data). Stale entries expire naturally.
+  // Pre-warming below overwrites the default view key with fresh data.
 
   // Record the last successful cron refresh time for UI timestamps.
-  const nowIso = new Date().toISOString();
-  await env.KV.put("leaderboard:last_updated", nowIso);
+  await env.KV.put("leaderboard:last_updated", dbNow());
 
   // Pre-cache the default leaderboard view
   const defaultData = await queryLeaderboard(env, {

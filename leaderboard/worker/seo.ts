@@ -23,17 +23,14 @@ export async function getTraderSEOData(
   env: Env
 ): Promise<TraderSEOData | null> {
   const row = await env.DB.prepare(
-    `WITH latest_snapshot AS (
-       SELECT trader_id, composite_score, total_pnl_pct, total_pnl,
-              sharpe_ratio, win_rate,
-              ROW_NUMBER() OVER (PARTITION BY trader_id ORDER BY snapshot_date DESC) AS rn
-       FROM performance_snapshots
-     )
-     SELECT t.username, t.asset_class,
+    `SELECT t.username, t.asset_class,
             s.composite_score, s.total_pnl_pct, s.total_pnl,
             s.sharpe_ratio, s.win_rate
      FROM traders t
-     LEFT JOIN latest_snapshot s ON s.trader_id = t.id AND s.rn = 1
+     LEFT JOIN performance_snapshots s ON s.trader_id = t.id
+       AND s.snapshot_date = (
+         SELECT MAX(ps.snapshot_date) FROM performance_snapshots ps WHERE ps.trader_id = t.id
+       )
      WHERE t.username = ?1 AND t.is_active = 1`
   )
     .bind(username.toLowerCase())

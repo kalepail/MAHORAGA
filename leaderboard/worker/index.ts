@@ -21,7 +21,6 @@ import {
   handleRegister,
 } from "./api";
 import { decryptToken } from "./crypto";
-import { invalidateTraderCache } from "./cache";
 import { isTransientFailure, markInactive, clearFailureState } from "./failure-handling";
 import { getTraderSEOData, generateTraderMetaTags } from "./seo";
 import type { SyncMessage } from "./types";
@@ -180,7 +179,7 @@ async function handleDevSync(username: string, env: Env): Promise<Response> {
   if (result.success) {
     // Success: clear failure state (auto-recovery)
     await clearFailureState(env, row.id);
-    await invalidateTraderCache(env, username);
+    // Trader cache entries use 5-min TTL — no manual invalidation needed.
   } else if (!isTransientFailure(result.alpacaStatus)) {
     // Bad signal: mark inactive
     const reason = result.error || `Alpaca ${result.alpacaStatus}`;

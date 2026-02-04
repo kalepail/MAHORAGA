@@ -28,10 +28,11 @@ CREATE TABLE IF NOT EXISTS traders (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_username ON traders(username);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_traders_github_repo ON traders(github_repo);
 CREATE INDEX IF NOT EXISTS idx_traders_sync_tier ON traders(sync_tier);
--- Partial index: active traders ordered by last_synced_at.
--- Used by reEnqueueStaleTraders cron to efficiently find traders needing re-sync.
--- NULLs sort first (ASC), so never-synced traders are found immediately.
-CREATE INDEX IF NOT EXISTS idx_traders_stale_sync ON traders(last_synced_at)
+-- Partial composite index: covers reEnqueueStaleTraders cron query which filters
+-- on is_active + sync_tier + last_synced_at and orders by sync_tier.
+-- Replaces the old idx_traders_stale_sync(last_synced_at) partial index.
+CREATE INDEX IF NOT EXISTS idx_traders_active_tier_sync
+  ON traders(sync_tier, last_synced_at)
   WHERE is_active = 1;
 
 -- Alpaca OAuth tokens (encrypted at rest via ENCRYPTION_KEY secret)
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS performance_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_trader ON performance_snapshots(trader_id, snapshot_date DESC);
-CREATE INDEX IF NOT EXISTS idx_snapshots_date ON performance_snapshots(snapshot_date);
+-- NOTE: idx_snapshots_date was removed — no query uses snapshot_date without trader_id.
 
 -- Equity curve (for charts)
 CREATE TABLE IF NOT EXISTS equity_history (
@@ -88,7 +89,9 @@ CREATE TABLE IF NOT EXISTS equity_history (
   profit_loss_pct REAL NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_equity_trader ON equity_history(trader_id, timestamp DESC);
+-- Covering index: includes equity column so sparkline queries (SELECT equity WHERE trader_id
+-- ORDER BY timestamp DESC LIMIT 30) are satisfied entirely from the index without table lookups.
+CREATE INDEX IF NOT EXISTS idx_equity_trader ON equity_history(trader_id, timestamp DESC, equity);
 -- Unique constraint: one data point per trader per day (added in migration 0001)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_equity_unique_trader_timestamp ON equity_history(trader_id, timestamp);
 
