@@ -258,15 +258,21 @@ const SOURCE_CONFIG = {
 };
 
 const DEFAULT_CONFIG: AgentConfig = {
-  data_poll_interval_ms: 15_000,
-  analyst_interval_ms: 60_000,
-  max_position_value: 1500,
-  max_positions: 100,
+  // Polling intervals - research shows 90-120s analyst interval reduces whipsaws
+  data_poll_interval_ms: 30_000,
+  analyst_interval_ms: 90_000,
+  // Position sizing - research: 15-25 positions optimal for sentiment trading
+  // Fractional Kelly sizing with 5% of cash per trade, $5k max per position
+  max_position_value: 5000,
+  max_positions: 25,
+  // Sentiment thresholds - research: 0.25+ minimum, 0.70+ for high confidence
   min_sentiment_score: 0.25,
-  min_analyst_confidence: 0.5,
+  min_analyst_confidence: 0.55,
+  // TP/SL - research: 5%/3% (1.67:1 R:R) appropriate for 1-3 day sentiment holds
   take_profit_pct: 5,
   stop_loss_pct: 3,
-  position_size_pct_of_cash: 3,
+  position_size_pct_of_cash: 5,
+  // Staleness - research: sentiment alpha decays 50% in first 24h
   stale_position_enabled: true,
   stale_min_hold_hours: 6,
   stale_max_hold_days: 3,
@@ -274,10 +280,12 @@ const DEFAULT_CONFIG: AgentConfig = {
   stale_mid_hold_days: 1,
   stale_mid_min_gain_pct: 1.5,
   stale_social_volume_decay: 0.35,
+  // LLM configuration
   llm_provider: "openai-raw",
   llm_model: "gpt-4o-mini",
   llm_analyst_model: "gpt-4o",
   llm_min_hold_minutes: 15,
+  // Options (disabled by default)
   options_enabled: false,
   options_min_confidence: 0.8,
   options_max_pct_per_trade: 0.02,
@@ -288,12 +296,13 @@ const DEFAULT_CONFIG: AgentConfig = {
   options_max_delta: 0.7,
   options_stop_loss_pct: 50,
   options_take_profit_pct: 100,
+  // Crypto - research: wider stops needed (6% SL for higher volatility)
   crypto_enabled: false,
   crypto_symbols: ["BTC/USD", "ETH/USD", "SOL/USD"],
   crypto_momentum_threshold: 2.0,
-  crypto_max_position_value: 1000,
-  crypto_take_profit_pct: 10,
-  crypto_stop_loss_pct: 5,
+  crypto_max_position_value: 2000,
+  crypto_take_profit_pct: 8,
+  crypto_stop_loss_pct: 6,
   ticker_blacklist: [],
   allowed_exchanges: ["NYSE", "NASDAQ", "ARCA", "AMEX", "BATS"],
 };
@@ -2505,20 +2514,21 @@ Analyze and provide BUY/SELL/HOLD recommendations:`;
         messages: [
           {
             role: "system",
-            content: `You are a senior trading analyst AI running a high-diversification sentiment momentum strategy with up to 100 concurrent positions. Make FINAL trading decisions based on social sentiment signals.
+            content: `You are a senior trading analyst AI running a concentrated sentiment momentum strategy with up to 25 high-conviction positions. Make FINAL trading decisions based on social sentiment signals.
 
 Rules:
-- Recommend BUY for symbols with meaningful sentiment signal from at least one strong data point - we want to fill many positions
+- Recommend BUY only for symbols with STRONG sentiment signals - prefer quality over quantity
+- Require multiple confirming data points or very high single-source conviction (sentiment > 0.7)
 - Recommend SELL for positions showing deteriorating sentiment, stale momentum, or any red flags
-- This is a fast-rotation strategy: positions held over 15 minutes are eligible for sell if thesis weakens
-- Prefer many small confident bets over few large ones - diversification is our risk management
-- Consider the QUALITY of sentiment, not just quantity
+- Positions held over 15 minutes are eligible for sell if thesis weakens
+- Each position is meaningful (up to 5% of cash) - only enter high-conviction trades
+- Consider the QUALITY and PERSISTENCE of sentiment, not just volume
 - Output valid JSON only
 
 Response format:
 {
   "recommendations": [
-    { "action": "BUY"|"SELL"|"HOLD", "symbol": "TICKER", "confidence": 0.0-1.0, "reasoning": "detailed reasoning", "suggested_size_pct": 1-5 }
+    { "action": "BUY"|"SELL"|"HOLD", "symbol": "TICKER", "confidence": 0.0-1.0, "reasoning": "detailed reasoning", "suggested_size_pct": 3-8 }
   ],
   "market_summary": "overall market read and sentiment",
   "high_conviction_plays": ["symbols you feel strongest about"]

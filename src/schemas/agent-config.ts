@@ -6,7 +6,7 @@ export const AgentConfigSchema = z
     analyst_interval_ms: z.number().min(30000).max(600000),
 
     max_position_value: z.number().positive().max(100000),
-    max_positions: z.number().int().min(1).max(200),
+    max_positions: z.number().int().min(1).max(50),
     min_sentiment_score: z.number().min(0).max(1),
     min_analyst_confidence: z.number().min(0).max(1),
 

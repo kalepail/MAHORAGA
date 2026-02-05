@@ -1,15 +1,15 @@
 {
-  "data_poll_interval_ms": 15000,
-  "analyst_interval_ms": 60000,
+  "data_poll_interval_ms": 30000,
+  "analyst_interval_ms": 90000,
 
-  "max_position_value": 1500,
-  "max_positions": 100,
+  "max_position_value": 5000,
+  "max_positions": 25,
   "min_sentiment_score": 0.25,
-  "min_analyst_confidence": 0.5,
+  "min_analyst_confidence": 0.55,
 
   "take_profit_pct": 5,
   "stop_loss_pct": 3,
-  "position_size_pct_of_cash": 3,
+  "position_size_pct_of_cash": 5,
 
   "llm_model": "gpt-4o-mini",
   "llm_analyst_model": "gpt-4o",
