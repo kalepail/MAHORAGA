@@ -146,10 +146,10 @@ async function pruneOldSnapshots(env: Env): Promise<void> {
  * Edge cases:
  *   - If all traders have the same value for a metric (min = max),
  *     that component contributes 0 to avoid division by zero.
- *   - Traders without Sharpe or Win Rate (too few trading days) get a partial
- *     score using only ROI (72.7%) and inverse drawdown (27.3%). This keeps
- *     the 40:15 ratio between these two components while ensuring traders
- *     with positive ROI rank above those with zero ROI.
+ *   - Traders without Sharpe and/or Win Rate (too few trading days) get a
+ *     normalized score using only available components. The raw weighted sum
+ *     is divided by the sum of available weights, ensuring the score stays
+ *     in [0, 100]. E.g., if sharpe is null: score = (sum / 0.7) * 100.
  *
  * Implementation: 2 D1 calls regardless of trader count.
  *   Step 1: Aggregate min/max ranges across all traders' latest snapshots.
@@ -198,6 +198,11 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
 
   // Use window function to identify latest snapshots, then update only those rows.
   // SQLite's UPDATE FROM allows us to join against the CTE to target specific rows.
+  //
+  // Score normalization: Each component uses its base weight (40/30/15/15), but
+  // the final sum is divided by the total available weights. This ensures the
+  // score is always in [0, 100] regardless of which components are available.
+  // E.g., if sharpe is null: available weights = 0.4 + 0.15 + 0.15 = 0.7
   await env.DB.prepare(`
     WITH ranked AS (
       SELECT trader_id, snapshot_date,
@@ -206,22 +211,28 @@ export async function computeAndStoreCompositeScores(env: Env): Promise<void> {
     )
     UPDATE performance_snapshots
     SET composite_score = ROUND((
-      -- ROI component (40% weight, or 72.7% if sharpe/wr missing)
+      -- ROI component (40% base weight)
       CASE WHEN ?1 = ?2 THEN 0.0
            ELSE MAX(0.0, MIN(1.0, (total_pnl_pct - ?1) / (?2 - ?1)))
-      END * CASE WHEN sharpe_ratio IS NULL OR win_rate IS NULL THEN 0.727 ELSE 0.4 END +
-      -- Sharpe component (30% weight, or 0% if missing)
+      END * 0.4 +
+      -- Sharpe component (30% base weight, 0 if missing)
       CASE WHEN sharpe_ratio IS NULL OR ?3 = ?4 THEN 0.0
            ELSE MAX(0.0, MIN(1.0, (sharpe_ratio - ?3) / (?4 - ?3))) * 0.3
       END +
-      -- Win rate component (15% weight, or 0% if missing)
+      -- Win rate component (15% base weight, 0 if missing)
       CASE WHEN win_rate IS NULL OR ?5 = ?6 THEN 0.0
            ELSE MAX(0.0, MIN(1.0, (win_rate - ?5) / (?6 - ?5))) * 0.15
       END +
-      -- Inverse max drawdown component (15% weight, or 27.3% if sharpe/wr missing)
+      -- Inverse max drawdown component (15% base weight)
       CASE WHEN ?7 = ?8 THEN 0.0
            ELSE MAX(0.0, MIN(1.0, ((100.0 - max_drawdown_pct) - ?7) / (?8 - ?7)))
-      END * CASE WHEN sharpe_ratio IS NULL OR win_rate IS NULL THEN 0.273 ELSE 0.15 END
+      END * 0.15
+    ) / (
+      -- Normalize by sum of available component weights (always 0.55 to 1.0)
+      0.4 + -- ROI always available
+      CASE WHEN sharpe_ratio IS NOT NULL AND ?3 != ?4 THEN 0.3 ELSE 0.0 END +
+      CASE WHEN win_rate IS NOT NULL AND ?5 != ?6 THEN 0.15 ELSE 0.0 END +
+      0.15 -- Inverse MDD always available
     ) * 100.0, 1)
     FROM ranked
     WHERE performance_snapshots.trader_id = ranked.trader_id
