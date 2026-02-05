@@ -195,6 +195,20 @@ export class SyncerDO extends DurableObject<Env> {
       const cash = account.cash;
 
       // ---------------------------------------------------------------
+      // Validate Alpaca Data
+      // ---------------------------------------------------------------
+      // Guard against malformed API responses that could produce NaN values.
+      // If critical fields are invalid, fail the sync rather than storing bad data.
+      if (!Number.isFinite(equity) || !Number.isFinite(cash)) {
+        return {
+          success: false,
+          traderId,
+          error: `Invalid account data from Alpaca (equity=${equity}, cash=${cash})`,
+          alpacaStatus: 200,
+        };
+      }
+
+      // ---------------------------------------------------------------
       // Detect Reset/Deleted Accounts
       // ---------------------------------------------------------------
       // If equity is 0 with no positions and no trades, the account was likely
@@ -215,7 +229,11 @@ export class SyncerDO extends DurableObject<Env> {
 
       // Determine the cost basis (total capital put into the account).
       // See detailed explanation above for why this fallback chain works.
-      const effectiveDeposits = totalDeposits > 0 ? totalDeposits : history.base_value;
+      // Guard against invalid base_value (NaN, negative, or 0).
+      const rawBaseValue = history.base_value;
+      const effectiveDeposits = totalDeposits > 0
+        ? totalDeposits
+        : (Number.isFinite(rawBaseValue) && rawBaseValue > 0 ? rawBaseValue : equity);
 
       // Total P&L: current equity minus cost basis. This is the net profit
       // (or loss) including both realized gains from closed trades and
@@ -223,8 +241,11 @@ export class SyncerDO extends DurableObject<Env> {
       const totalPnl = equity - effectiveDeposits;
 
       // Total P&L %: return on investment as a percentage of cost basis.
-      const totalPnlPct =
-        effectiveDeposits > 0 ? ((equity - effectiveDeposits) / effectiveDeposits) * 100 : 0;
+      // Final guard: ensure result is finite to prevent NaN in the database.
+      const rawPnlPct = effectiveDeposits > 0
+        ? ((equity - effectiveDeposits) / effectiveDeposits) * 100
+        : 0;
+      const totalPnlPct = Number.isFinite(rawPnlPct) ? rawPnlPct : 0;
 
       // Split total P&L into unrealized (open positions) and realized (closed trades).
       // Unrealized P&L comes directly from Alpaca's position data.
