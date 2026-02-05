@@ -2599,16 +2599,30 @@ Response format:
       if (pos.asset_class === "us_option") continue; // Options handled separately
 
       const plPct = (pos.unrealized_pl / (pos.market_value - pos.unrealized_pl)) * 100;
+      const entry = this.state.positionEntries[pos.symbol];
+      const holdHours = entry ? (Date.now() - entry.entry_time) / (1000 * 60 * 60) : 0;
+
+      // Determine if this is a crypto position - use appropriate TP/SL
+      const isCrypto = isCryptoSymbol(pos.symbol, this.state.config.crypto_symbols || []);
+      const takeProfitPct = isCrypto ? this.state.config.crypto_take_profit_pct : this.state.config.take_profit_pct;
+      const stopLossPct = isCrypto ? this.state.config.crypto_stop_loss_pct : this.state.config.stop_loss_pct;
 
       // Take profit
-      if (plPct >= this.state.config.take_profit_pct) {
+      if (plPct >= takeProfitPct) {
         await this.executeSell(alpaca, pos.symbol, `Take profit at +${plPct.toFixed(1)}%`);
         continue;
       }
 
       // Stop loss
-      if (plPct <= -this.state.config.stop_loss_pct) {
+      if (plPct <= -stopLossPct) {
         await this.executeSell(alpaca, pos.symbol, `Stop loss at ${plPct.toFixed(1)}%`);
+        continue;
+      }
+
+      // Quick loser exit: positions down >2% within first 1-6 hours rarely recover
+      // Research: sentiment trades that don't work early are usually noise
+      if (holdHours >= 1 && holdHours < this.state.config.stale_min_hold_hours && plPct <= -2) {
+        await this.executeSell(alpaca, pos.symbol, `Quick loser: ${plPct.toFixed(1)}% in ${holdHours.toFixed(1)}h`);
         continue;
       }
 
