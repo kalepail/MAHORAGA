@@ -7,6 +7,7 @@
  */
 
 import { dbNow } from "./dates";
+import { isD1WritePaused } from "./helpers";
 
 /**
  * Check if a failure is transient (should retry) vs bad signal (mark inactive).
@@ -37,6 +38,7 @@ export async function markInactive(
   traderId: string,
   reason: string
 ): Promise<void> {
+  if (isD1WritePaused(env)) return;
   try {
     await env.DB.prepare(
       `UPDATE traders SET
@@ -61,6 +63,7 @@ export async function clearFailureState(
   env: Env,
   traderId: string
 ): Promise<void> {
+  if (isD1WritePaused(env)) return;
   try {
     await env.DB.prepare(
       `UPDATE traders SET

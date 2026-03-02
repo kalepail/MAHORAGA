@@ -16,29 +16,34 @@ import {
 } from "./cache";
 import { queryLeaderboard, queryStats } from "./api";
 import { dbNow, dbTimeAgo } from "./dates";
+import { isD1WritePaused } from "./helpers";
 import type { SyncMessage, StaleTraderRow, ScoreRangesRow } from "./types";
 
 export async function runCronCycle(env: Env): Promise<void> {
-  console.log("[cron] Starting cycle");
+  const paused = isD1WritePaused(env);
+  console.log(`[cron] Starting cycle${paused ? " (D1 writes paused — skipping write steps)" : ""}`);
 
-  // Each step is isolated so a failure in one doesn't skip the rest.
-  // E.g., if composite scores fail, tiers/caches/re-enqueue still run.
-  try { await purgeDeadAccounts(env); }
-  catch (err) { console.error("[cron] purgeDeadAccounts failed:", err instanceof Error ? err.message : err); }
+  if (!paused) {
+    // Each step is isolated so a failure in one doesn't skip the rest.
+    // E.g., if composite scores fail, tiers/caches/re-enqueue still run.
+    try { await purgeDeadAccounts(env); }
+    catch (err) { console.error("[cron] purgeDeadAccounts failed:", err instanceof Error ? err.message : err); }
 
-  try { await computeAndStoreCompositeScores(env); }
-  catch (err) { console.error("[cron] computeAndStoreCompositeScores failed:", err instanceof Error ? err.message : err); }
+    try { await computeAndStoreCompositeScores(env); }
+    catch (err) { console.error("[cron] computeAndStoreCompositeScores failed:", err instanceof Error ? err.message : err); }
 
-  // Prune old snapshots AFTER scores are computed (so we don't delete unscored snapshots)
-  try { await pruneOldSnapshots(env); }
-  catch (err) { console.error("[cron] pruneOldSnapshots failed:", err instanceof Error ? err.message : err); }
+    // Prune old snapshots AFTER scores are computed (so we don't delete unscored snapshots)
+    try { await pruneOldSnapshots(env); }
+    catch (err) { console.error("[cron] pruneOldSnapshots failed:", err instanceof Error ? err.message : err); }
 
-  try { await assignSyncTiers(env); }
-  catch (err) { console.error("[cron] assignSyncTiers failed:", err instanceof Error ? err.message : err); }
+    try { await assignSyncTiers(env); }
+    catch (err) { console.error("[cron] assignSyncTiers failed:", err instanceof Error ? err.message : err); }
 
-  try { await reEnqueueStaleTraders(env); }
-  catch (err) { console.error("[cron] reEnqueueStaleTraders failed:", err instanceof Error ? err.message : err); }
+    try { await reEnqueueStaleTraders(env); }
+    catch (err) { console.error("[cron] reEnqueueStaleTraders failed:", err instanceof Error ? err.message : err); }
+  }
 
+  // KV cache rebuilds are reads from D1 + writes to KV — safe even when D1 writes are paused
   try { await rebuildCaches(env); }
   catch (err) { console.error("[cron] rebuildCaches failed:", err instanceof Error ? err.message : err); }
 

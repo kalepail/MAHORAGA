@@ -33,3 +33,8 @@ export function safeParseInt(value: string | null, fallback: number): number {
 export function errorJson(message: string, status: number): Response {
   return json({ error: message }, status);
 }
+
+/** Check if D1 writes are paused via env var. */
+export function isD1WritePaused(env: Env): boolean {
+  return (env as Record<string, unknown>).D1_WRITES_PAUSED === "true";
+}

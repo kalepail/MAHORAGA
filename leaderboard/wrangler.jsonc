@@ -77,7 +77,8 @@
   //   ENCRYPTION_KEY             - 256-bit key for encrypting OAuth tokens at rest
 
   "vars": {
-    "ALPACA_OAUTH_REDIRECT_URI": "https://sukuna.dev/api/oauth/callback"
+    "ALPACA_OAUTH_REDIRECT_URI": "https://sukuna.dev/api/oauth/callback",
+    "D1_WRITES_PAUSED": "true"
   },
 
   // Custom domain

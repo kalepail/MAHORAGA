@@ -14,6 +14,7 @@
 
 import { tierDelaySeconds, type SyncTier } from "./tiers";
 import { decryptToken } from "./crypto";
+import { isD1WritePaused } from "./helpers";
 
 import { isTransientFailure, markInactive, clearFailureState } from "./failure-handling";
 import type { SyncMessage, TraderWithTokenRow } from "./types";
@@ -23,6 +24,13 @@ export async function processSyncMessage(
   env: Env
 ): Promise<void> {
   const { traderId } = message.body;
+
+  // D1 writes paused — ack and re-enqueue with delay to avoid losing the trader
+  if (isD1WritePaused(env)) {
+    message.ack();
+    await safeReEnqueue(env, traderId, 5 as SyncTier); // slowest tier while paused
+    return;
+  }
 
   // 1. Look up trader + token from D1
   //    Note: We sync inactive accounts too (they can recover during grace period)

@@ -24,7 +24,7 @@ import {
   leaderboardCacheKey,
   invalidateLeaderboardCaches,
 } from "./cache";
-import { json, safeParseInt, errorJson } from "./helpers";
+import { json, safeParseInt, errorJson, isD1WritePaused } from "./helpers";
 import { dbNow, dbTimeAgo } from "./dates";
 import { SORT_FIELDS } from "./constants";
 import type {
@@ -559,6 +559,11 @@ export async function handleOAuthCallback(
       { error: "This Alpaca account is already linked to another profile" },
       409
     );
+  }
+
+  // Block registration while D1 writes are paused
+  if (isD1WritePaused(env)) {
+    return json({ error: "Registration is temporarily paused for maintenance" }, 503);
   }
 
   // Create trader + store encrypted token atomically

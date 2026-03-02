@@ -21,6 +21,7 @@ import {
 import { calcSharpeRatio, calcMaxDrawdown, calcWinRate } from "./metrics";
 import { dbNow } from "./dates";
 import { normalizeAlpacaAssetClass, deriveTraderAssetClass } from "./constants";
+import { isD1WritePaused } from "./helpers";
 
 // D1 allows up to 100 statements per batch. We use 80 as a conservative
 // limit. The first batch in a delete+reinsert sequence reserves 1 slot
@@ -286,6 +287,20 @@ export class SyncerDO extends DurableObject<Env> {
       // ---------------------------------------------------------------
       // Write to D1 in a single batch (transactional)
       // ---------------------------------------------------------------
+
+      // D1 writes paused — return computed metrics without persisting
+      if (isD1WritePaused(this.env)) {
+        return {
+          success: true,
+          traderId,
+          equity,
+          totalPnlPct,
+          sharpe,
+          winRate,
+          maxDrawdownPct,
+          numTrades: filledCount,
+        };
+      }
 
       // Preserve existing composite_score (computed by cron) before overwriting.
       // We fetch it first because INSERT OR REPLACE deletes the old row, and
