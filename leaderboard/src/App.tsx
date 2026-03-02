@@ -49,6 +49,22 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header navigate={navigate} currentPage={route.page} />
+      <div className="border-b border-amber-500/30 bg-amber-500/5 px-4 py-3">
+        <div className="max-w-[1400px] mx-auto text-[12px] leading-relaxed tracking-wide text-amber-200/90">
+          <span className="font-semibold text-amber-300">PAUSED</span>
+          <span className="text-hud-text-dim mx-2">//</span>
+          Leaderboard syncing is paused &mdash; CF D1 writes turned out to be pretty expensive and my AI didn't know that.
+          Data shown is frozen from the last sync. If you'd like to pick it up and improve the service, the code is open source:{" "}
+          <a
+            href="https://github.com/kalepail/MAHORAGA/tree/main/leaderboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-amber-300 hover:text-amber-200 transition-colors"
+          >
+            github.com/kalepail/MAHORAGA/leaderboard
+          </a>
+        </div>
+      </div>
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 py-6">
         {route.page === "leaderboard" && <Leaderboard navigate={navigate} />}
         {route.page === "trader" && (
